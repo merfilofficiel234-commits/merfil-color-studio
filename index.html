@@ -27,6 +27,8 @@ button,input,select{font:inherit;color:inherit}
 .ab.on{background:var(--gold);color:#151515;border-color:var(--gold)}
 .ab.hb{top:auto;right:auto;left:8px;bottom:8px;font-size:11px;padding:6px 10px}
 #histo{display:none;position:absolute;left:8px;bottom:44px;width:130px;height:56px;border-radius:6px;border:1px solid var(--grey);pointer-events:none}
+.preset.on{border-color:var(--gold);color:var(--gold)}
+input[type=text]{width:100%;background:var(--raise);border:1px solid var(--grey);border-radius:8px;padding:11px;font-size:16px}
 .badge{position:absolute;top:8px;left:8px;font-size:10px;letter-spacing:.1em;color:var(--mute);background:rgba(16,17,20,.82);border-radius:5px;padding:5px 8px;display:none}
 .transport{height:46px;flex:none;display:flex;align-items:center;gap:4px;padding:0 10px;background:var(--panel);border-top:1px solid var(--line)}
 .tbtn{width:40px;height:34px;border:0;border-radius:6px;background:transparent;color:var(--white);font-size:15px}
@@ -157,8 +159,32 @@ select{width:100%;background:var(--raise);border:1px solid var(--grey);border-ra
   </div>
 
   <div class="panel" id="masks">
-   <h3>Masques et sélections</h3>
-   <p class="hint">Pinceau, gomme, sélection d’une personne ou du ciel : cette section arrive en phase 5. Rien n’est actif pour l’instant.</p>
+   <div class="sub" id="mkSel">
+    <button class="chip active" data-k="0">Masque 1</button>
+    <button class="chip" data-k="1">Masque 2</button>
+    <button class="chip" data-k="2">Masque 3</button>
+   </div>
+   <div class="sub">
+    <button class="chip active" data-m="p">Pinceau</button>
+    <button class="chip" data-m="g">Réglages du masque</button>
+   </div>
+   <div id="mk_p">
+    <div class="sub">
+     <button class="chip active" id="toolBrush">Peindre</button>
+     <button class="chip" id="toolErase">Gommer</button>
+    </div>
+    <div id="mk_pc"></div>
+    <div class="row">
+     <button class="preset on" id="mkShow">Voir le masque</button>
+     <button class="preset" id="mkInv">Inverser</button>
+     <button class="preset" id="mkClear">Effacer</button>
+    </div>
+    <p class="hint">Peignez avec le doigt directement sur l’image : la zone rouge est le masque. Les réglages de l’onglet Réglages du masque ne touchent que cette zone.</p>
+   </div>
+   <div id="mk_g" style="display:none">
+    <div class="ctl"><label>Nom du masque</label><input type="text" id="mkName" maxlength="18"></div>
+    <div id="mk_gc"></div>
+   </div>
   </div>
 
   <div class="panel" id="export">
@@ -187,7 +213,7 @@ select{width:100%;background:var(--raise);border:1px solid var(--grey);border-ra
 <script>
 const $=id=>document.getElementById(id);
 const cv=$('view'), video=$('videoPreview');
-let mediaType='', mediaURL='', original=false, ready=false, tex=null, raf=0;
+let mediaType='', mediaURL='', original=false, ready=false, tex=null, raf=0, curPanel='media';
 const FPS=30;
 
 /* ---------- Réglages (id, nom, min, max, défaut, groupe) ---------- */
@@ -391,6 +417,95 @@ $('histoBtn').addEventListener('click',()=>{
  scheduleHisto();
 });
 
+
+/* ---------- Masques au pinceau (3 masques indépendants) ---------- */
+let MW=8,MH=8,maskData=new Uint8Array(256),maskTex=null,ms=0,tool='brush',showMaskOn=true;
+const masks=[0,1,2].map(i=>({name:'Masque '+(i+1),ex:0,co:100,sa:100,te:0,op:100,inv:false,cv:null,ctx:null}));
+const mkRow=(id,label,min,max,val)=>`<div class="ctl"><label>${label} <output id="${id}V">${val}</output></label><input type="range" id="${id}" min="${min}" max="${max}" value="${val}"></div>`;
+$('mk_pc').innerHTML=mkRow('mk_size','Taille du pinceau',1,40,10)+mkRow('mk_soft','Douceur des bords',0,100,60);
+$('mk_gc').innerHTML=mkRow('mk_op','Opacité du masque',0,100,100)+mkRow('mk_ex','Exposition',-100,100,0)+mkRow('mk_co','Contraste',0,200,100)+mkRow('mk_sa','Saturation',0,200,100)+mkRow('mk_te','Température',-100,100,0);
+['mk_size','mk_soft'].forEach(id=>$(id).addEventListener('input',e=>$(id+'V').textContent=e.target.value));
+const MKEY={mk_op:'op',mk_ex:'ex',mk_co:'co',mk_sa:'sa',mk_te:'te'};
+Object.keys(MKEY).forEach(id=>$(id).addEventListener('input',e=>{
+ masks[ms][MKEY[id]]=+e.target.value;$(id+'V').textContent=e.target.value;draw();
+}));
+function refreshMaskUI(){
+ const m=masks[ms];
+ $('mkName').value=m.name;
+ Object.keys(MKEY).forEach(id=>{$(id).value=m[MKEY[id]];$(id+'V').textContent=m[MKEY[id]]});
+ $('mkInv').classList.toggle('on',m.inv);
+ document.querySelectorAll('#mkSel .chip').forEach((c,i)=>{c.textContent=masks[i].name;c.classList.toggle('active',i===ms)});
+}
+document.querySelectorAll('#mkSel .chip').forEach(c=>c.addEventListener('click',()=>{ms=+c.dataset.k;refreshMaskUI();draw()}));
+$('mkName').addEventListener('input',e=>{masks[ms].name=e.target.value||'Masque '+(ms+1);document.querySelectorAll('#mkSel .chip')[ms].textContent=masks[ms].name});
+document.querySelectorAll('[data-m]').forEach(c=>c.addEventListener('click',()=>{
+ document.querySelectorAll('[data-m]').forEach(o=>o.classList.toggle('active',o===c));
+ $('mk_p').style.display=c.dataset.m==='p'?'block':'none';
+ $('mk_g').style.display=c.dataset.m==='g'?'block':'none';
+}));
+$('toolBrush').addEventListener('click',()=>{tool='brush';$('toolBrush').classList.add('active');$('toolErase').classList.remove('active')});
+$('toolErase').addEventListener('click',()=>{tool='erase';$('toolErase').classList.add('active');$('toolBrush').classList.remove('active')});
+$('mkShow').addEventListener('click',()=>{showMaskOn=!showMaskOn;$('mkShow').classList.toggle('on',showMaskOn);draw()});
+$('mkInv').addEventListener('click',()=>{masks[ms].inv=!masks[ms].inv;$('mkInv').classList.toggle('on',masks[ms].inv);draw()});
+$('mkClear').addEventListener('click',()=>{const m=masks[ms];if(!m.ctx)return;m.ctx.clearRect(0,0,MW,MH);syncMask(ms);uploadMasks();draw()});
+
+function initMasks(w,h){
+ const k=768/Math.max(w,h);
+ MW=Math.max(8,Math.round(w*k));MH=Math.max(8,Math.round(h*k));
+ maskData=new Uint8Array(MW*MH*4);
+ masks.forEach(m=>{
+  m.cv=document.createElement('canvas');m.cv.width=MW;m.cv.height=MH;
+  m.ctx=m.cv.getContext('2d',{willReadFrequently:true});
+  m.ex=m.te=0;m.co=m.sa=100;m.op=100;m.inv=false;
+ });
+ uploadMasks();refreshMaskUI();
+}
+function syncMask(k){ // copie le dessin du masque k dans le canal k de la texture (lignes inversées pour WebGL)
+ const m=masks[k];if(!m.ctx)return;
+ const a=m.ctx.getImageData(0,0,MW,MH).data;
+ for(let y=0;y<MH;y++){
+  const dst=(MH-1-y)*MW;
+  for(let x=0;x<MW;x++)maskData[(dst+x)*4+k]=a[(y*MW+x)*4+3];
+ }
+}
+function uploadMasks(){
+ if(!gl||!maskTex)return;
+ gl.activeTexture(gl.TEXTURE2);gl.bindTexture(gl.TEXTURE_2D,maskTex);
+ gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,false);
+ gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,MW,MH,0,gl.RGBA,gl.UNSIGNED_BYTE,maskData);
+ gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true);
+ gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,tex);
+}
+(function(){
+ let painting=false,last=null,pend=false;
+ const pos=e=>{
+  const r=cv.getBoundingClientRect(),sc=Math.min(r.width/cv.width,r.height/cv.height);
+  const dw=cv.width*sc,dh=cv.height*sc,ox=(r.width-dw)/2,oy=(r.height-dh)/2;
+  return{x:(e.clientX-r.left-ox)/dw*MW,y:(e.clientY-r.top-oy)/dh*MH};
+ };
+ const stamp=(c,x,y,rad,soft)=>{
+  c.globalCompositeOperation=tool==='erase'?'destination-out':'source-over';
+  const g=c.createRadialGradient(x,y,rad*(1-soft),x,y,rad);
+  g.addColorStop(0,'rgba(255,255,255,1)');g.addColorStop(1,'rgba(255,255,255,0)');
+  c.fillStyle=g;c.beginPath();c.arc(x,y,rad,0,7);c.fill();
+ };
+ const paint=e=>{
+  const m=masks[ms];if(!m.ctx)return;
+  const p=pos(e),rad=Math.max(2,(+$('mk_size').value)/100*MW/2),soft=(+$('mk_soft').value)/100;
+  if(!last)last=p;
+  const dx=p.x-last.x,dy=p.y-last.y,n=Math.max(1,Math.ceil(Math.hypot(dx,dy)/Math.max(1,rad*.25)));
+  for(let i=1;i<=n;i++)stamp(m.ctx,last.x+dx*i/n,last.y+dy*i/n,rad,soft);
+  last=p;
+  if(!pend){pend=true;requestAnimationFrame(()=>{pend=false;syncMask(ms);uploadMasks();draw()})}
+ };
+ cv.addEventListener('pointerdown',e=>{
+  if(curPanel!=='masks'||!ready)return;
+  painting=true;last=null;cv.setPointerCapture(e.pointerId);paint(e);
+ });
+ cv.addEventListener('pointermove',e=>{if(painting)paint(e)});
+ ['pointerup','pointercancel'].forEach(ev=>cv.addEventListener(ev,()=>painting=false));
+})();
+
 /* ---------- Moteur WebGL ---------- */
 const gl=cv.getContext('webgl',{preserveDrawingBuffer:true,antialias:false});
 const VS=`attribute vec2 p;varying vec2 v;void main(){v=p*.5+.5;gl_Position=vec4(p,0.,1.);}`;
@@ -398,6 +513,7 @@ const FS=`precision highp float;varying vec2 v;uniform sampler2D t;uniform vec2 
 uniform float ex,co,sa,vi,te,ti,sh,hi,vg,sp;
 uniform vec3 li,ga,gn;
 uniform vec4 hs[8];uniform float uh;uniform sampler2D cu;uniform float uc;
+uniform vec4 mp[3];uniform vec2 mo[3];uniform sampler2D mk;uniform float um,us;
 vec3 rgb2hsv(vec3 c){vec4 K=vec4(0.,-1./3.,2./3.,-1.);vec4 p=mix(vec4(c.bg,K.wz),vec4(c.gb,K.xy),step(c.b,c.g));vec4 q=mix(vec4(p.xyw,c.r),vec4(c.r,p.yzx),step(p.x,c.r));float d=q.x-q.y;float e=1.0e-6;return vec3(abs(q.z+(q.w-q.y)/(6.*d+e)),d/(q.x+e),q.x);}
 vec3 hsv2rgb(vec3 c){vec4 K=vec4(1.,2./3.,1./3.,3.);vec3 p=abs(fract(c.xxx+K.xyz)*6.-K.www);return c.z*mix(K.xxx,clamp(p-K.xxx,0.,1.),c.y);}
 void main(){
@@ -439,7 +555,25 @@ void main(){
   x=mc*.99609375+.001953125;
   c=vec3(texture2D(cu,vec2(x.r,.5)).r,texture2D(cu,vec2(x.g,.5)).g,texture2D(cu,vec2(x.b,.5)).b);
  }
+ float sw=0.;
+ if(um>.5||us>.5){
+  vec3 mv=texture2D(mk,v).rgb;
+  for(int i=0;i<3;i++){
+   float a=i==0?mv.r:(i==1?mv.g:mv.b);
+   a=mix(a,1.-a,mo[i].y)*mo[i].x;
+   if(um>.5){
+    vec3 g=c*exp2(mp[i].x);
+    g*=vec3(1.+mp[i].w*.25,1.,1.-mp[i].w*.25);
+    g=(g-.5)*mp[i].y+.5;
+    float gy=dot(g,vec3(.2126,.7152,.0722));
+    g=mix(vec3(gy),g,mp[i].z);
+    c=mix(c,g,a);
+   }
+   if(float(i)+1.==us)sw=a;
+  }
+ }
  c*=1.-vg*smoothstep(.25,.75,length(v-.5));
+ c=mix(c,vec3(.95,.2,.15),sw*.55);
  gl_FragColor=vec4(clamp(c,0.,1.),1.);
 }`;
 const U={};
@@ -452,7 +586,7 @@ if(gl){
  const buf=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,buf);
  gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,1,1]),gl.STATIC_DRAW);
  const loc=gl.getAttribLocation(prog,'p');gl.enableVertexAttribArray(loc);gl.vertexAttribPointer(loc,2,gl.FLOAT,false,0,0);
- ['t','px','ex','co','sa','vi','te','ti','sh','hi','vg','sp','li','ga','gn','hs','uh','cu','uc'].forEach(n=>U[n]=gl.getUniformLocation(prog,n));
+ ['t','px','ex','co','sa','vi','te','ti','sh','hi','vg','sp','li','ga','gn','hs','uh','cu','uc','mp','mo','mk','um','us'].forEach(n=>U[n]=gl.getUniformLocation(prog,n));
  tex=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,tex);
  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true);
  [[gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE],[gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE],[gl.TEXTURE_MIN_FILTER,gl.LINEAR],[gl.TEXTURE_MAG_FILTER,gl.LINEAR]]
@@ -463,6 +597,12 @@ if(gl){
   .forEach(([a,b])=>gl.texParameteri(gl.TEXTURE_2D,a,b));
  gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,tex);
  uploadLUT();
+ gl.activeTexture(gl.TEXTURE2);
+ maskTex=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,maskTex);
+ [[gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE],[gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE],[gl.TEXTURE_MIN_FILTER,gl.LINEAR],[gl.TEXTURE_MAG_FILTER,gl.LINEAR]]
+  .forEach(([a,b])=>gl.texParameteri(gl.TEXTURE_2D,a,b));
+ gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,1,1,0,gl.RGBA,gl.UNSIGNED_BYTE,new Uint8Array(4));
+ gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,tex);
 }else{
  $('placeholder').innerHTML='<div class="mark">✦</div><b>WebGL indisponible</b>Ce navigateur ne peut pas lancer le moteur d’image.';
 }
@@ -496,6 +636,13 @@ function draw(){
   const a=new Float32Array(32);let on=0;
   HSL.forEach((o,i)=>{a.set([o.h/100,o.s/100,o.l/100,HC[i][2]/360],i*4);if(o.h||o.s||o.l)on=1});
   gl.uniform4fv(U.hs,a);gl.uniform1f(U.uh,original?0:on);
+ }
+ {
+  const A=new Float32Array(12),O=new Float32Array(6);let on=0;
+  masks.forEach((m,i)=>{A.set([m.ex/50,m.co/100,m.sa/100,m.te/100],i*4);O.set([m.op/100,m.inv?1:0],i*2);if(m.ex||m.te||m.co!==100||m.sa!==100)on=1});
+  gl.uniform4fv(U.mp,A);gl.uniform2fv(U.mo,O);gl.uniform1i(U.mk,2);
+  gl.uniform1f(U.um,original?0:on);
+  gl.uniform1f(U.us,(!original&&curPanel==='masks'&&showMaskOn)?ms+1:0);
  }
  gl.uniform1i(U.cu,1);gl.uniform1f(U.uc,original?0:(curvesOn?1:0));
  gl.uniform3f(U.gn,1+tn[0]*.6+ln*.5,1+tn[1]*.6+ln*.5,1+tn[2]*.6+ln*.5);
@@ -554,7 +701,7 @@ $('fileInput').addEventListener('change',e=>{
     const c=document.createElement('canvas');w=Math.round(w*k);h=Math.round(h*k);
     c.width=w;c.height=h;c.getContext('2d').drawImage(im,0,0,w,h);src=c;
    }
-   cv.width=w;cv.height=h;
+   cv.width=w;cv.height=h;initMasks(w,h);
    gl.bindTexture(gl.TEXTURE_2D,tex);
    gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,src);
    ready=true;showCanvas();draw();
@@ -573,6 +720,7 @@ $('fileInput').addEventListener('change',e=>{
 video.addEventListener('loadedmetadata',()=>{
  const k=Math.min(1,1920/Math.max(video.videoWidth,video.videoHeight));
  cv.width=Math.round(video.videoWidth*k);cv.height=Math.round(video.videoHeight*k);
+ initMasks(cv.width,cv.height);
  ready=true;showCanvas();
  video.currentTime=0.01; // force l'affichage de la première image
 });
@@ -601,6 +749,9 @@ document.querySelectorAll('[data-preset]').forEach(b=>b.addEventListener('click'
 function goTo(name){
  document.querySelectorAll('.panel').forEach(p=>p.classList.toggle('active',p.id===name));
  document.querySelectorAll('.pages button').forEach(b=>b.classList.toggle('active',b.dataset.panel===name));
+ curPanel=name;
+ cv.style.touchAction=name==='masks'?'none':'auto';
+ draw();
 }
 document.querySelectorAll('.pages button').forEach(b=>b.addEventListener('click',()=>goTo(b.dataset.panel)));
 
@@ -660,6 +811,7 @@ $('exportButton').addEventListener('click',()=>{
  },type,.94);
 });
 
+refreshMaskUI();
 apply();
 </script>
 </body>
