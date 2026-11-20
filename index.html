@@ -25,6 +25,8 @@ button,input,select{font:inherit;color:inherit}
 .empty .mark{font-size:30px;color:var(--gold);margin-bottom:8px}
 .ab{position:absolute;top:8px;right:8px;background:rgba(16,17,20,.82);border:1px solid var(--grey);border-radius:6px;padding:7px 12px;font-size:12px;font-weight:600}
 .ab.on{background:var(--gold);color:#151515;border-color:var(--gold)}
+.ab.hb{top:auto;right:auto;left:8px;bottom:8px;font-size:11px;padding:6px 10px}
+#histo{display:none;position:absolute;left:8px;bottom:44px;width:130px;height:56px;border-radius:6px;border:1px solid var(--grey);pointer-events:none}
 .badge{position:absolute;top:8px;left:8px;font-size:10px;letter-spacing:.1em;color:var(--mute);background:rgba(16,17,20,.82);border-radius:5px;padding:5px 8px;display:none}
 .transport{height:46px;flex:none;display:flex;align-items:center;gap:4px;padding:0 10px;background:var(--panel);border-top:1px solid var(--line)}
 .tbtn{width:40px;height:34px;border:0;border-radius:6px;background:transparent;color:var(--white);font-size:15px}
@@ -91,6 +93,8 @@ select{width:100%;background:var(--raise);border:1px solid var(--grey);border-ra
   <video id="videoPreview" playsinline preload="auto"></video>
   <span class="badge" id="badge">ORIGINAL</span>
   <button class="ab" id="beforeButton">Avant</button>
+  <canvas id="histo" width="260" height="112"></canvas>
+  <button class="ab hb" id="histoBtn">Histogramme</button>
  </div>
 
  <div class="transport">
@@ -353,6 +357,40 @@ document.querySelectorAll('#cvch .chip').forEach(b=>b.addEventListener('click',(
 $('cvReset').addEventListener('click',()=>{CV[cvCh]=[{x:0,y:0},{x:1,y:1}];uploadLUT();drawCurve();draw()});
 function resetCurves(){['m','r','g','b'].forEach(k=>CV[k]=[{x:0,y:0},{x:1,y:1}]);uploadLUT();drawCurve()}
 
+
+/* ---------- Histogramme (lit l'image affichée dans le moniteur) ---------- */
+let histoOn=false,histoPending=false;
+const hSmall=document.createElement('canvas');
+function scheduleHisto(){
+ if(!histoOn||histoPending)return;
+ histoPending=true;
+ requestAnimationFrame(()=>{histoPending=false;computeHisto()});
+}
+function computeHisto(){
+ if(!histoOn||!ready||!cv.width)return;
+ const w=128,h=Math.max(1,Math.round(128*cv.height/cv.width));
+ hSmall.width=w;hSmall.height=h;
+ const sc=hSmall.getContext('2d',{willReadFrequently:true});
+ sc.drawImage(cv,0,0,w,h);
+ const d=sc.getImageData(0,0,w,h).data,B=64,bins=[new Array(B).fill(0),new Array(B).fill(0),new Array(B).fill(0)];
+ for(let i=0;i<d.length;i+=4){bins[0][d[i]>>2]++;bins[1][d[i+1]>>2]++;bins[2][d[i+2]>>2]++}
+ let mx=1;bins.forEach(a=>a.forEach((v,i)=>{if(i>0&&i<B-1&&v>mx)mx=v}));
+ const hc=$('histo'),x=hc.getContext('2d'),W=hc.width,H=hc.height;
+ x.globalCompositeOperation='source-over';x.fillStyle='rgba(12,13,16,.8)';x.fillRect(0,0,W,H);
+ x.globalCompositeOperation='lighter';
+ ['rgba(224,69,58,.85)','rgba(82,211,106,.85)','rgba(63,111,224,.85)'].forEach((col,c)=>{
+  x.fillStyle=col;
+  for(let i=0;i<B;i++){const v=Math.min(1,Math.sqrt(bins[c][i]/mx))*(H-4);x.fillRect(i*W/B,H-v,W/B+.5,v)}
+ });
+ x.globalCompositeOperation='source-over';
+}
+$('histoBtn').addEventListener('click',()=>{
+ histoOn=!histoOn;
+ $('histo').style.display=histoOn?'block':'none';
+ $('histoBtn').classList.toggle('on',histoOn);
+ scheduleHisto();
+});
+
 /* ---------- Moteur WebGL ---------- */
 const gl=cv.getContext('webgl',{preserveDrawingBuffer:true,antialias:false});
 const VS=`attribute vec2 p;varying vec2 v;void main(){v=p*.5+.5;gl_Position=vec4(p,0.,1.);}`;
@@ -462,6 +500,7 @@ function draw(){
  gl.uniform1i(U.cu,1);gl.uniform1f(U.uc,original?0:(curvesOn?1:0));
  gl.uniform3f(U.gn,1+tn[0]*.6+ln*.5,1+tn[1]*.6+ln*.5,1+tn[2]*.6+ln*.5);
  gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
+ scheduleHisto();
 }
 function loop(){
  draw();
