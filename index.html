@@ -12,45 +12,30 @@ html,body{height:100%;margin:0;overflow:hidden;background:var(--bg);color:var(--
  font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif;overscroll-behavior:none}
 button,input,select{font:inherit;color:inherit}
 #app{height:100dvh;display:flex;flex-direction:column;padding-top:env(safe-area-inset-top)}
-
-/* Barre supérieure */
-.top{height:46px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 12px;
- background:var(--panel);border-bottom:1px solid var(--line)}
+.top{height:46px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 12px;background:var(--panel);border-bottom:1px solid var(--line)}
 .brand{font-weight:800;font-size:17px;letter-spacing:.14em;color:var(--gold)}
 .brand small{margin-left:8px;font-weight:500;font-size:10px;letter-spacing:.2em;color:var(--mute)}
 .fname{font-size:11px;color:var(--mute);max-width:42%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-
-/* Moniteur */
-.monitor{flex:1 1 0;min-height:120px;position:relative;background:#000;display:flex;align-items:center;justify-content:center;overflow:hidden}
-#imagePreview,#videoPreview{display:none;max-width:100%;max-height:100%;object-fit:contain}
-.empty{text-align:center;color:var(--mute);font-size:13px;padding:20px}
-.empty b{display:block;color:var(--white);font-size:15px;margin-bottom:6px}
+.monitor{flex:1 1 0;min-height:120px;position:relative;background:#000;overflow:hidden}
+#view{display:none;width:100%;height:100%;object-fit:contain}
+#videoPreview{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+.empty{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;color:var(--mute);font-size:13px;padding:20px}
+.empty b{color:var(--white);font-size:15px;margin-bottom:6px}
 .empty .mark{font-size:30px;color:var(--gold);margin-bottom:8px}
-.ab{position:absolute;top:8px;right:8px;background:rgba(16,17,20,.82);border:1px solid var(--grey);
- border-radius:6px;padding:7px 12px;font-size:12px;font-weight:600}
+.ab{position:absolute;top:8px;right:8px;background:rgba(16,17,20,.82);border:1px solid var(--grey);border-radius:6px;padding:7px 12px;font-size:12px;font-weight:600}
 .ab.on{background:var(--gold);color:#151515;border-color:var(--gold)}
-.badge{position:absolute;top:8px;left:8px;font-size:10px;letter-spacing:.1em;color:var(--mute);
- background:rgba(16,17,20,.82);border-radius:5px;padding:5px 8px;display:none}
-
-/* Transport */
+.badge{position:absolute;top:8px;left:8px;font-size:10px;letter-spacing:.1em;color:var(--mute);background:rgba(16,17,20,.82);border-radius:5px;padding:5px 8px;display:none}
 .transport{height:46px;flex:none;display:flex;align-items:center;gap:4px;padding:0 10px;background:var(--panel);border-top:1px solid var(--line)}
 .tbtn{width:40px;height:34px;border:0;border-radius:6px;background:transparent;color:var(--white);font-size:15px}
 .tbtn:active{background:var(--grey)}
 .tbtn.play{background:var(--gold);color:#151515;width:46px}
 .tc{margin-left:auto;font-variant-numeric:tabular-nums;font-size:14px;color:var(--gold);letter-spacing:.04em}
-
-/* Timeline */
 .timeline{height:70px;flex:none;position:relative;background:#0c0d10;border-top:1px solid var(--line);touch-action:none;user-select:none;-webkit-user-select:none}
-.ruler{height:18px;border-bottom:1px solid var(--line);position:relative;
- background:repeating-linear-gradient(90deg,var(--grey) 0 1px,transparent 1px 10%)}
-.track{position:absolute;left:8px;right:8px;top:24px;height:38px;border-radius:5px;
- background:linear-gradient(100deg,#3b4650,#6b5a40 55%,#3d5246);border:1px solid var(--gold);
- font-size:10px;color:rgba(255,255,255,.75);padding:4px 7px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.ruler{height:18px;border-bottom:1px solid var(--line);background:repeating-linear-gradient(90deg,var(--grey) 0 1px,transparent 1px 10%)}
+.track{position:absolute;left:8px;right:8px;top:24px;height:38px;border-radius:5px;background:linear-gradient(100deg,#3b4650,#6b5a40 55%,#3d5246);border:1px solid var(--gold);font-size:10px;color:rgba(255,255,255,.75);padding:4px 7px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 .head{position:absolute;top:0;bottom:0;width:2px;background:var(--gold);left:8px;pointer-events:none}
 .head::before{content:"";position:absolute;top:0;left:-5px;border:6px solid transparent;border-top-color:var(--gold)}
-
-/* Panneau */
-.panel-wrap{flex:none;height:38dvh;max-height:330px;background:var(--panel);border-top:1px solid var(--line);overflow-y:auto;-webkit-overflow-scrolling:touch;padding:6px 14px 14px}
+.panel-wrap{flex:none;height:40dvh;max-height:340px;background:var(--panel);border-top:1px solid var(--line);overflow-y:auto;-webkit-overflow-scrolling:touch;padding:6px 14px 14px}
 .panel{display:none}.panel.active{display:block}
 .sub{display:flex;gap:6px;margin:8px 0 4px;overflow-x:auto}
 .chip{flex:none;border:1px solid var(--grey);background:var(--raise);border-radius:6px;padding:8px 12px;font-size:12px;color:var(--mute)}
@@ -62,8 +47,6 @@ button,input,select{font:inherit;color:inherit}
 input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:28px;background:transparent;margin:0}
 input[type=range]::-webkit-slider-runnable-track{height:3px;background:var(--grey);border-radius:2px}
 input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;height:22px;margin-top:-9.5px;border-radius:50%;background:var(--gold);border:3px solid var(--bg)}
-input[type=range]::-moz-range-track{height:3px;background:var(--grey)}
-input[type=range]::-moz-range-thumb{width:16px;height:16px;border-radius:50%;background:var(--gold);border:3px solid var(--bg)}
 .hint{font-size:11px;color:var(--mute);line-height:1.5;margin:8px 0}
 .row{display:flex;gap:8px;overflow-x:auto;padding:4px 0}
 .btn{border:0;border-radius:8px;padding:12px 14px;background:var(--gold);color:#151515;font-weight:700;font-size:14px;text-align:center}
@@ -75,13 +58,11 @@ input[type=range]::-moz-range-thumb{width:16px;height:16px;border-radius:50%;bac
 h3{margin:12px 0 4px;font-size:14px;font-weight:700}
 select{width:100%;background:var(--raise);border:1px solid var(--grey);border-radius:8px;padding:11px;font-size:14px}
 #fileInput{display:none}
-
-/* Barre de pages */
 .pages{flex:none;display:flex;background:var(--panel);border-top:1px solid var(--line);padding:4px 4px calc(4px + env(safe-area-inset-bottom))}
 .pages button{flex:1;border:0;background:none;color:var(--mute);font-size:11px;padding:7px 2px;border-radius:8px}
 .pages button span{display:block;font-size:19px;margin-bottom:2px}
 .pages button.active{color:var(--gold)}
-.pages button:disabled{opacity:.4}
+.pages button svg{display:block;width:23px;height:23px;margin:0 auto 3px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 </style>
 </head>
 <body>
@@ -94,8 +75,8 @@ select{width:100%;background:var(--raise);border:1px solid var(--grey);border-ra
 
  <div class="monitor">
   <div class="empty" id="placeholder"><div class="mark">✦</div><b>Moniteur vide</b>Appuyez sur Média pour importer une photo ou une vidéo.</div>
-  <img id="imagePreview" alt="Aperçu de la photo">
-  <video id="videoPreview" playsinline></video>
+  <canvas id="view"></canvas>
+  <video id="videoPreview" playsinline preload="auto"></video>
   <span class="badge" id="badge">ORIGINAL</span>
   <button class="ab" id="beforeButton">Avant</button>
  </div>
@@ -114,8 +95,6 @@ select{width:100%;background:var(--raise);border:1px solid var(--grey);border-ra
  </div>
 
  <div class="panel-wrap">
-
-  <!-- MÉDIA -->
   <div class="panel active" id="media">
    <h3>Bibliothèque</h3>
    <p class="hint">Importez une photo ou une vidéo depuis votre iPhone. Le traitement reste sur votre téléphone.</p>
@@ -123,19 +102,15 @@ select{width:100%;background:var(--raise);border:1px solid var(--grey);border-ra
    <input type="file" id="fileInput" accept="image/*,video/*">
   </div>
 
-  <!-- COULEUR -->
   <div class="panel" id="color">
    <div class="sub">
-    <button class="chip active">Primaire</button>
+    <button class="chip active" data-g="p">Primaire</button>
+    <button class="chip" data-g="t">Tons</button>
+    <button class="chip" data-g="e">Effets</button>
     <button class="chip" disabled>Roues · bientôt</button>
     <button class="chip" disabled>Courbes · bientôt</button>
-    <button class="chip" disabled>HSL · bientôt</button>
    </div>
-   <div class="ctl"><label>Exposition <output id="exposureValue">0</output></label><input type="range" id="exposure" min="-100" max="100" value="0"></div>
-   <div class="ctl"><label>Contraste <output id="contrastValue">100</output></label><input type="range" id="contrast" min="0" max="200" value="100"></div>
-   <div class="ctl"><label>Saturation <output id="saturationValue">100</output></label><input type="range" id="saturation" min="0" max="200" value="100"></div>
-   <div class="ctl"><label>Température <output id="temperatureValue">0</output></label><input type="range" id="temperature" min="-100" max="100" value="0"></div>
-   <div class="ctl"><label>Teinte <output id="hueValue">0</output></label><input type="range" id="hue" min="-90" max="90" value="0"></div>
+   <div id="sliders"></div>
    <h3>Présélections</h3>
    <div class="row">
     <button class="preset" data-preset="cinema">Cinéma</button>
@@ -146,13 +121,11 @@ select{width:100%;background:var(--raise);border:1px solid var(--grey);border-ra
    <button class="btn dark full" id="resetButton">Réinitialiser les réglages</button>
   </div>
 
-  <!-- MASQUES -->
   <div class="panel" id="masks">
    <h3>Masques et sélections</h3>
    <p class="hint">Pinceau, gomme, sélection d’une personne ou du ciel : cette section arrive en phase 5. Rien n’est actif pour l’instant.</p>
   </div>
 
-  <!-- EXPORT -->
   <div class="panel" id="export">
    <h3>Photo</h3>
    <select id="format">
@@ -166,83 +139,126 @@ select{width:100%;background:var(--raise);border:1px solid var(--grey);border-ra
    <p class="hint">L’export vidéo avec audio sera ajouté dans une prochaine version.</p>
    <button class="btn dark full" disabled>Export vidéo · à venir</button>
   </div>
-
  </div>
 
  <nav class="pages">
-  <button class="active" data-panel="media"><span>▧</span>Média</button>
-  <button data-panel="color"><span>◉</span>Couleur</button>
-  <button data-panel="masks"><span>◌</span>Masques</button>
-  <button data-panel="export"><span>⇧</span>Export</button>
+  <button class="active" data-panel="media"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="M3 17l5-5 4 4 3-3 6 6"/></svg>Média</button>
+  <button data-panel="color"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5"/></svg>Couleur</button>
+  <button data-panel="masks"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5" stroke-dasharray="3.2 3"/><circle cx="12" cy="12" r="2.5"/></svg>Masques</button>
+  <button data-panel="export"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5M4 20h16"/></svg>Export</button>
  </nav>
 </div>
 
 <script>
 const $=id=>document.getElementById(id);
-const img=$('imagePreview'), video=$('videoPreview');
-let mediaType='', mediaURL='', original=false;
-const sliders=['exposure','contrast','saturation','temperature','hue'];
-const defaults={exposure:0,contrast:100,saturation:100,temperature:0,hue:0};
-const FPS=30; // pas image par image approximatif
+const cv=$('view'), video=$('videoPreview');
+let mediaType='', mediaURL='', original=false, ready=false, tex=null, raf=0;
+const FPS=30;
 
-function values(){const v={};sliders.forEach(id=>v[id]=+$(id).value);return v}
-function params(v){
- return {
-  brightness:(100+v.exposure)/100,
-  contrast:v.contrast/100,
-  saturate:v.saturation/100,
-  sepia:Math.max(0,v.temperature)/250,
-  hue:v.hue+Math.min(0,v.temperature)*.35
- };
+/* ---------- Réglages (id, nom, min, max, défaut, groupe) ---------- */
+const S=[
+ ['exposure','Exposition',-100,100,0,'p'],
+ ['contrast','Contraste',0,200,100,'p'],
+ ['saturation','Saturation',0,200,100,'p'],
+ ['vibrance','Vibrance',-100,100,0,'p'],
+ ['temperature','Température',-100,100,0,'p'],
+ ['tint','Teinte (vert ↔ magenta)',-100,100,0,'p'],
+ ['shadows','Ombres',-100,100,0,'t'],
+ ['highlights','Hautes lumières',-100,100,0,'t'],
+ ['vignette','Vignettage',0,100,0,'e'],
+ ['sharpen','Netteté',0,100,0,'e']
+];
+const ids=S.map(s=>s[0]);
+const defaults={};S.forEach(s=>defaults[s[0]]=s[4]);
+S.forEach(([id,label,min,max,def,g])=>{
+ $('sliders').insertAdjacentHTML('beforeend',
+ `<div class="ctl" data-g="${g}"><label>${label} <output id="${id}Value">${def}</output></label><input type="range" id="${id}" min="${min}" max="${max}" value="${def}"></div>`);
+});
+function showGroup(g){
+ document.querySelectorAll('.ctl').forEach(c=>c.style.display=c.dataset.g===g?'block':'none');
+ document.querySelectorAll('.chip[data-g]').forEach(c=>c.classList.toggle('active',c.dataset.g===g));
 }
-function cssFilter(v){
- const p=params(v);
- return `brightness(${p.brightness*100}%) contrast(${p.contrast*100}%) saturate(${p.saturate*100}%) sepia(${p.sepia}) hue-rotate(${p.hue}deg)`;
+document.querySelectorAll('.chip[data-g]').forEach(c=>c.addEventListener('click',()=>showGroup(c.dataset.g)));
+showGroup('p');
+function values(){const v={};ids.forEach(id=>v[id]=+$(id).value);return v}
+
+/* ---------- Moteur WebGL ---------- */
+const gl=cv.getContext('webgl',{preserveDrawingBuffer:true,antialias:false});
+const VS=`attribute vec2 p;varying vec2 v;void main(){v=p*.5+.5;gl_Position=vec4(p,0.,1.);}`;
+const FS=`precision highp float;varying vec2 v;uniform sampler2D t;uniform vec2 px;
+uniform float ex,co,sa,vi,te,ti,sh,hi,vg,sp;
+void main(){
+ vec3 c=texture2D(t,v).rgb;
+ if(sp>0.){
+  vec3 n=(texture2D(t,v+vec2(px.x,0.)).rgb+texture2D(t,v-vec2(px.x,0.)).rgb+texture2D(t,v+vec2(0.,px.y)).rgb+texture2D(t,v-vec2(0.,px.y)).rgb)*.25;
+  c+=(c-n)*sp*2.;
+ }
+ c*=exp2(ex);
+ c*=vec3(1.+te*.25,1.,1.-te*.25);
+ c*=vec3(1.+ti*.12,1.-ti*.2,1.+ti*.12);
+ float l=dot(c,vec3(.2126,.7152,.0722));
+ float sm=1.-clamp(l,0.,1.); sm*=sm;
+ float hm=clamp(l,0.,1.); hm*=hm;
+ c*=1.+sh*.8*sm+hi*.5*hm;
+ c=(c-.5)*co+.5;
+ l=dot(c,vec3(.2126,.7152,.0722));
+ float chroma=max(c.r,max(c.g,c.b))-min(c.r,min(c.g,c.b));
+ c=mix(vec3(l),c,sa*(1.+vi*(1.-chroma)));
+ c*=1.-vg*smoothstep(.25,.75,length(v-.5));
+ gl_FragColor=vec4(clamp(c,0.,1.),1.);
+}`;
+const U={};
+if(gl){
+ const mk=(type,src)=>{const s=gl.createShader(type);gl.shaderSource(s,src);gl.compileShader(s);return s};
+ const prog=gl.createProgram();
+ gl.attachShader(prog,mk(gl.VERTEX_SHADER,VS));
+ gl.attachShader(prog,mk(gl.FRAGMENT_SHADER,FS));
+ gl.linkProgram(prog);gl.useProgram(prog);
+ const buf=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,buf);
+ gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,1,1]),gl.STATIC_DRAW);
+ const loc=gl.getAttribLocation(prog,'p');gl.enableVertexAttribArray(loc);gl.vertexAttribPointer(loc,2,gl.FLOAT,false,0,0);
+ ['t','px','ex','co','sa','vi','te','ti','sh','hi','vg','sp'].forEach(n=>U[n]=gl.getUniformLocation(prog,n));
+ tex=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,tex);
+ gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true);
+ [[gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE],[gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE],[gl.TEXTURE_MIN_FILTER,gl.LINEAR],[gl.TEXTURE_MAG_FILTER,gl.LINEAR]]
+  .forEach(([a,b])=>gl.texParameteri(gl.TEXTURE_2D,a,b));
+}else{
+ $('placeholder').innerHTML='<div class="mark">✦</div><b>WebGL indisponible</b>Ce navigateur ne peut pas lancer le moteur d’image.';
+}
+
+function draw(){
+ if(!gl||!ready)return;
+ const v=original?defaults:values();
+ gl.viewport(0,0,cv.width,cv.height);
+ if(mediaType==='video'){
+  if(video.readyState<2)return;
+  gl.bindTexture(gl.TEXTURE_2D,tex);
+  gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,video);
+ }
+ gl.uniform1i(U.t,0);
+ gl.uniform2f(U.px,1/cv.width,1/cv.height);
+ gl.uniform1f(U.ex,v.exposure/50);
+ gl.uniform1f(U.co,v.contrast/100);
+ gl.uniform1f(U.sa,v.saturation/100);
+ gl.uniform1f(U.vi,v.vibrance/100);
+ gl.uniform1f(U.te,v.temperature/100);
+ gl.uniform1f(U.ti,v.tint/100);
+ gl.uniform1f(U.sh,v.shadows/100);
+ gl.uniform1f(U.hi,v.highlights/100);
+ gl.uniform1f(U.vg,v.vignette/100);
+ gl.uniform1f(U.sp,v.sharpen/100);
+ gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
+}
+function loop(){
+ draw();
+ if(mediaType==='video'&&!video.paused&&!video.ended)raf=requestAnimationFrame(loop);
 }
 function apply(){
- const v=values();
- sliders.forEach(id=>$(id+'Value').textContent=$(id).value);
- const f=original?'none':cssFilter(v);
- img.style.filter=f; video.style.filter=f;
+ ids.forEach(id=>$(id+'Value').textContent=$(id).value);
+ draw();
 }
-sliders.forEach(id=>$(id).addEventListener('input',apply));
-
-function setOriginal(on){
- original=on;
- $('beforeButton').textContent=on?'Après':'Avant';
- $('beforeButton').classList.toggle('on',on);
- $('badge').style.display=on?'block':'none';
- apply();
-}
-$('beforeButton').addEventListener('click',()=>setOriginal(!original));
-
-function showMessage(t){$('placeholder').style.display='block';$('placeholder').innerHTML='<div class="mark">✦</div><b>'+t+'</b>'}
-
-$('fileInput').addEventListener('change',e=>{
- const file=e.target.files[0];
- if(!file)return;
- if(mediaURL)URL.revokeObjectURL(mediaURL);
- mediaURL=URL.createObjectURL(file);
- $('placeholder').style.display='none';
- img.style.display='none'; video.style.display='none';
- $('fileName').textContent=file.name;
- $('trackLabel').textContent=file.name;
- $('playButton').textContent='▶';
- mediaType=file.type.startsWith('image/')?'image':file.type.startsWith('video/')?'video':'';
- if(mediaType==='image'){img.src=mediaURL;img.style.display='block'}
- else if(mediaType==='video'){video.src=mediaURL;video.style.display='block'}
- else{mediaType='';showMessage('Format non pris en charge')}
- setPlayhead(0); $('timeLabel').textContent=fmt(0);
- setOriginal(false);
- if(mediaType)goTo('color');
-});
-
-$('resetButton').addEventListener('click',()=>{
- sliders.forEach(id=>$(id).value=defaults[id]);
- setOriginal(false);
-});
-// Double appui sur un curseur : retour à sa valeur d'origine
-sliders.forEach(id=>{
+ids.forEach(id=>$(id).addEventListener('input',apply));
+ids.forEach(id=>{
  let last=0;
  $(id).addEventListener('pointerup',()=>{
   const now=Date.now();
@@ -251,10 +267,79 @@ sliders.forEach(id=>{
  });
 });
 
-const presets={cinema:[-8,115,115,8,0],warm:[5,105,115,35,0],cool:[0,110,105,-30,0],reset:[0,100,100,0,0]};
-document.querySelectorAll('[data-preset]').forEach(b=>b.addEventListener('click',()=>{
- sliders.forEach((id,i)=>$(id).value=presets[b.dataset.preset][i]);
+function setOriginal(on){
+ original=on;
+ $('beforeButton').textContent=on?'Après':'Avant';
+ $('beforeButton').classList.toggle('on',on);
+ $('badge').style.display=on?'block':'none';
+ draw();
+}
+$('beforeButton').addEventListener('click',()=>setOriginal(!original));
+
+/* ---------- Import ---------- */
+function showMessage(t){cv.style.display='none';$('placeholder').style.display='flex';$('placeholder').innerHTML='<div class="mark">✦</div><b>'+t+'</b>'}
+function showCanvas(){$('placeholder').style.display='none';cv.style.display='block'}
+
+$('fileInput').addEventListener('change',e=>{
+ const file=e.target.files[0];
+ if(!file||!gl)return;
+ cancelAnimationFrame(raf);video.pause();
+ if(mediaURL)URL.revokeObjectURL(mediaURL);
+ mediaURL=URL.createObjectURL(file);
+ ready=false;
+ $('fileName').textContent=file.name;
+ $('trackLabel').textContent=file.name;
+ $('playButton').textContent='▶';
+ setPlayhead(0);$('timeLabel').textContent=fmt(0);
+ mediaType=file.type.startsWith('image/')?'image':file.type.startsWith('video/')?'video':'';
+ if(mediaType==='image'){
+  const im=new Image();
+  im.onload=()=>{
+   let src=im,w=im.naturalWidth,h=im.naturalHeight;
+   const max=gl.getParameter(gl.MAX_TEXTURE_SIZE),k=Math.min(1,max/Math.max(w,h));
+   if(k<1){
+    const c=document.createElement('canvas');w=Math.round(w*k);h=Math.round(h*k);
+    c.width=w;c.height=h;c.getContext('2d').drawImage(im,0,0,w,h);src=c;
+   }
+   cv.width=w;cv.height=h;
+   gl.bindTexture(gl.TEXTURE_2D,tex);
+   gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,src);
+   ready=true;showCanvas();draw();
+  };
+  im.onerror=()=>showMessage('Image illisible');
+  im.src=mediaURL;
+ }else if(mediaType==='video'){
+  video.src=mediaURL;video.load();
+ }else{
+  showMessage('Format non pris en charge');return;
+ }
  setOriginal(false);
+ goTo('color');
+});
+
+video.addEventListener('loadedmetadata',()=>{
+ const k=Math.min(1,1920/Math.max(video.videoWidth,video.videoHeight));
+ cv.width=Math.round(video.videoWidth*k);cv.height=Math.round(video.videoHeight*k);
+ ready=true;showCanvas();
+ video.currentTime=0.01; // force l'affichage de la première image
+});
+['loadeddata','seeked'].forEach(ev=>video.addEventListener(ev,draw));
+video.addEventListener('error',()=>showMessage('Vidéo illisible sur ce navigateur'));
+
+$('resetButton').addEventListener('click',()=>{
+ ids.forEach(id=>$(id).value=defaults[id]);
+ setOriginal(false);apply();
+});
+const presets={
+ cinema:{exposure:-8,contrast:115,saturation:115,temperature:8,vignette:25},
+ warm:{exposure:5,contrast:105,saturation:115,temperature:35},
+ cool:{contrast:110,saturation:105,temperature:-30},
+ reset:{}
+};
+document.querySelectorAll('[data-preset]').forEach(b=>b.addEventListener('click',()=>{
+ const p=presets[b.dataset.preset];
+ ids.forEach(id=>$(id).value=(id in p)?p[id]:defaults[id]);
+ setOriginal(false);apply();
 }));
 
 function goTo(name){
@@ -263,18 +348,18 @@ function goTo(name){
 }
 document.querySelectorAll('.pages button').forEach(b=>b.addEventListener('click',()=>goTo(b.dataset.panel)));
 
-/* Lecture, image par image, timeline */
+/* ---------- Lecture, image par image, timeline ---------- */
 function fmt(s){
- const m=Math.floor(s/60), sec=Math.floor(s%60), cs=Math.floor((s%1)*100);
+ const m=Math.floor(s/60),sec=Math.floor(s%60),cs=Math.floor((s%1)*100);
  return String(m).padStart(2,'0')+':'+String(sec).padStart(2,'0')+'.'+String(cs).padStart(2,'0');
 }
-function setPlayhead(ratio){
- const tl=$('timeline').clientWidth-16;
- $('playhead').style.left=(8+Math.max(0,Math.min(1,ratio))*tl)+'px';
+function setPlayhead(r){
+ const w=$('timeline').clientWidth-16;
+ $('playhead').style.left=(8+Math.max(0,Math.min(1,r))*w)+'px';
 }
 $('playButton').addEventListener('click',()=>{
- if(mediaType!=='video')return;
- if(video.paused){video.play();$('playButton').textContent='Ⅱ'}
+ if(mediaType!=='video'||!ready)return;
+ if(video.paused){video.play();$('playButton').textContent='Ⅱ';loop()}
  else{video.pause();$('playButton').textContent='▶'}
 });
 function step(d){
@@ -290,13 +375,11 @@ video.addEventListener('timeupdate',()=>{
  $('timeLabel').textContent=fmt(video.currentTime);
 });
 video.addEventListener('ended',()=>$('playButton').textContent='▶');
-
 function scrub(e){
  if(mediaType!=='video'||!video.duration)return;
  const r=$('timeline').getBoundingClientRect();
  const ratio=Math.max(0,Math.min(1,(e.clientX-r.left-8)/(r.width-16)));
- video.currentTime=ratio*video.duration;
- setPlayhead(ratio);
+ video.currentTime=ratio*video.duration;setPlayhead(ratio);
 }
 let dragging=false;
 $('timeline').addEventListener('pointerdown',e=>{dragging=true;$('timeline').setPointerCapture(e.pointerId);scrub(e)});
@@ -304,57 +387,21 @@ $('timeline').addEventListener('pointermove',e=>{if(dragging)scrub(e)});
 $('timeline').addEventListener('pointerup',()=>dragging=false);
 window.addEventListener('resize',()=>{if(mediaType==='video'&&video.duration)setPlayhead(video.currentTime/video.duration)});
 
-/* Export photo : calcul pixel par pixel (Safari iPhone ne gère pas ctx.filter) */
-function mul(A,B){
- const R=[];
- for(let i=0;i<3;i++){R.push([]);for(let j=0;j<3;j++)R[i].push(A[i][0]*B[0][j]+A[i][1]*B[1][j]+A[i][2]*B[2][j])}
- return R;
-}
-function colorMatrix(p){
- const s=p.saturate;
- const Sa=[[.213+.787*s,.715-.715*s,.072-.072*s],[.213-.213*s,.715+.285*s,.072-.072*s],[.213-.213*s,.715-.715*s,.072+.928*s]];
- const t=1-p.sepia;
- const Se=[[.393+.607*t,.769-.769*t,.189-.189*t],[.349-.349*t,.686+.314*t,.168-.168*t],[.272-.272*t,.534-.534*t,.131+.869*t]];
- const a=p.hue*Math.PI/180, c=Math.cos(a), n=Math.sin(a);
- const H=[[.213+c*.787-n*.213,.715-c*.715-n*.715,.072-c*.072+n*.928],
-          [.213-c*.213+n*.143,.715+c*.285+n*.140,.072-c*.072-n*.283],
-          [.213-c*.213-n*.787,.715-c*.715+n*.715,.072+c*.928+n*.072]];
- return mul(H,mul(Se,Sa));
-}
-const clamp=x=>x<0?0:x>1?1:x;
-
+/* ---------- Export photo (même moteur que l'aperçu) ---------- */
 $('exportButton').addEventListener('click',()=>{
  const msg=$('exportMessage');
- if(mediaType!=='image'||!img.naturalWidth){msg.textContent='Importez une photo pour utiliser cet export.';return}
- msg.textContent='Traitement en cours…';
- setTimeout(()=>{
-  try{
-   const type=$('format').value;
-   const ext={'image/jpeg':'jpg','image/png':'png','image/webp':'webp'}[type];
-   const canvas=document.createElement('canvas');
-   canvas.width=img.naturalWidth; canvas.height=img.naturalHeight;
-   const ctx=canvas.getContext('2d');
-   ctx.drawImage(img,0,0);
-   const p=params(values());
-   const data=ctx.getImageData(0,0,canvas.width,canvas.height);
-   const d=data.data, M=colorMatrix(p);
-   for(let i=0;i<d.length;i+=4){
-    let r=clamp(d[i]/255*p.brightness), g=clamp(d[i+1]/255*p.brightness), b=clamp(d[i+2]/255*p.brightness);
-    r=clamp((r-.5)*p.contrast+.5); g=clamp((g-.5)*p.contrast+.5); b=clamp((b-.5)*p.contrast+.5);
-    d[i]=clamp(M[0][0]*r+M[0][1]*g+M[0][2]*b)*255;
-    d[i+1]=clamp(M[1][0]*r+M[1][1]*g+M[1][2]*b)*255;
-    d[i+2]=clamp(M[2][0]*r+M[2][1]*g+M[2][2]*b)*255;
-   }
-   ctx.putImageData(data,0,0);
-   canvas.toBlob(blob=>{
-    if(!blob){msg.textContent='Export impossible pour ce fichier ou ce format.';return}
-    const a=document.createElement('a'), url=URL.createObjectURL(blob);
-    a.href=url; a.download='MC-Studio-creation.'+ext; a.click();
-    setTimeout(()=>URL.revokeObjectURL(url),1500);
-    msg.textContent='Votre fichier '+ext.toUpperCase()+' est prêt.';
-   },type,.94);
-  }catch(err){msg.textContent='Erreur pendant l’export : photo trop lourde pour cet appareil.'}
- },30);
+ if(mediaType!=='image'||!ready){msg.textContent='Importez une photo pour utiliser cet export.';return}
+ const type=$('format').value;
+ const ext={'image/jpeg':'jpg','image/png':'png','image/webp':'webp'}[type];
+ const wasOriginal=original;original=false;draw();
+ cv.toBlob(blob=>{
+  original=wasOriginal;draw();
+  if(!blob){msg.textContent='Export impossible pour ce fichier ou ce format.';return}
+  const a=document.createElement('a'),url=URL.createObjectURL(blob);
+  a.href=url;a.download='MC-Studio-creation.'+ext;a.click();
+  setTimeout(()=>URL.revokeObjectURL(url),1500);
+  msg.textContent='Votre fichier '+ext.toUpperCase()+' est prêt ('+cv.width+' × '+cv.height+').';
+ },type,.94);
 });
 
 apply();
