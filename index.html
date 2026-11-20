@@ -1,271 +1,222 @@
-
 <!DOCTYPE html>
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#101114">
 <title>MC Studio | Merfil Color Studio</title>
-
 <style>
-*{box-sizing:border-box}
-body{
- margin:0;background:#101114;color:#f5f5f5;
- font-family:-apple-system,BlinkMacSystemFont,Arial,sans-serif;
-}
-button,input{font:inherit}
-header{
- height:65px;padding:10px 16px;
- display:flex;align-items:center;justify-content:space-between;
- background:#191b20;border-bottom:1px solid #303238;
- position:sticky;top:0;z-index:5;
-}
-.brand{font-size:21px;font-weight:900;color:#d6b46a;letter-spacing:1px}
-.brand small{display:block;font-size:9px;color:#aaa;letter-spacing:2px;margin-top:3px}
-.status{font-size:10px;color:#aaa}
-main{padding:14px 13px 100px;max-width:650px;margin:auto}
-.section-title{font-size:17px;font-weight:700;margin:8px 0 12px}
-.card{
- background:#1b1d22;border:1px solid #303238;
- border-radius:14px;padding:13px;margin-bottom:13px;
-}
-.viewer{
- background:#050607;border-radius:10px;
- height:260px;display:flex;align-items:center;
- justify-content:center;overflow:hidden;position:relative;
-}
-#imagePreview,#videoPreview{
- display:none;width:100%;height:100%;object-fit:contain;
-}
-.placeholder{text-align:center;color:#858585;padding:20px}
-.placeholder .symbol{font-size:40px;color:#d6b46a}
-.toolbar{display:flex;gap:9px;margin-top:12px}
-.btn{
- border:0;border-radius:9px;padding:12px 14px;
- background:#d6b46a;color:#151515;font-weight:700;
-}
-.btn.dark{background:#303238;color:white}
-.btn:disabled{opacity:.45}
-.upload{flex:1;text-align:center;cursor:pointer}
+:root{--bg:#101114;--panel:#16181c;--raise:#1d2025;--line:#2a2d33;--grey:#343a40;--gold:#d6b46a;--white:#f5f5f5;--mute:#8d9299}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;margin:0;overflow:hidden;background:var(--bg);color:var(--white);
+ font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif;overscroll-behavior:none}
+button,input,select{font:inherit;color:inherit}
+#app{height:100dvh;display:flex;flex-direction:column;padding-top:env(safe-area-inset-top)}
+
+/* Barre supérieure */
+.top{height:46px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 12px;
+ background:var(--panel);border-bottom:1px solid var(--line)}
+.brand{font-weight:800;font-size:17px;letter-spacing:.14em;color:var(--gold)}
+.brand small{margin-left:8px;font-weight:500;font-size:10px;letter-spacing:.2em;color:var(--mute)}
+.fname{font-size:11px;color:var(--mute);max-width:42%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* Moniteur */
+.monitor{flex:1 1 0;min-height:120px;position:relative;background:#000;display:flex;align-items:center;justify-content:center;overflow:hidden}
+#imagePreview,#videoPreview{display:none;max-width:100%;max-height:100%;object-fit:contain}
+.empty{text-align:center;color:var(--mute);font-size:13px;padding:20px}
+.empty b{display:block;color:var(--white);font-size:15px;margin-bottom:6px}
+.empty .mark{font-size:30px;color:var(--gold);margin-bottom:8px}
+.ab{position:absolute;top:8px;right:8px;background:rgba(16,17,20,.82);border:1px solid var(--grey);
+ border-radius:6px;padding:7px 12px;font-size:12px;font-weight:600}
+.ab.on{background:var(--gold);color:#151515;border-color:var(--gold)}
+.badge{position:absolute;top:8px;left:8px;font-size:10px;letter-spacing:.1em;color:var(--mute);
+ background:rgba(16,17,20,.82);border-radius:5px;padding:5px 8px;display:none}
+
+/* Transport */
+.transport{height:46px;flex:none;display:flex;align-items:center;gap:4px;padding:0 10px;background:var(--panel);border-top:1px solid var(--line)}
+.tbtn{width:40px;height:34px;border:0;border-radius:6px;background:transparent;color:var(--white);font-size:15px}
+.tbtn:active{background:var(--grey)}
+.tbtn.play{background:var(--gold);color:#151515;width:46px}
+.tc{margin-left:auto;font-variant-numeric:tabular-nums;font-size:14px;color:var(--gold);letter-spacing:.04em}
+
+/* Timeline */
+.timeline{height:70px;flex:none;position:relative;background:#0c0d10;border-top:1px solid var(--line);touch-action:none;user-select:none;-webkit-user-select:none}
+.ruler{height:18px;border-bottom:1px solid var(--line);position:relative;
+ background:repeating-linear-gradient(90deg,var(--grey) 0 1px,transparent 1px 10%)}
+.track{position:absolute;left:8px;right:8px;top:24px;height:38px;border-radius:5px;
+ background:linear-gradient(100deg,#3b4650,#6b5a40 55%,#3d5246);border:1px solid var(--gold);
+ font-size:10px;color:rgba(255,255,255,.75);padding:4px 7px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.head{position:absolute;top:0;bottom:0;width:2px;background:var(--gold);left:8px;pointer-events:none}
+.head::before{content:"";position:absolute;top:0;left:-5px;border:6px solid transparent;border-top-color:var(--gold)}
+
+/* Panneau */
+.panel-wrap{flex:none;height:38dvh;max-height:330px;background:var(--panel);border-top:1px solid var(--line);overflow-y:auto;-webkit-overflow-scrolling:touch;padding:6px 14px 14px}
+.panel{display:none}.panel.active{display:block}
+.sub{display:flex;gap:6px;margin:8px 0 4px;overflow-x:auto}
+.chip{flex:none;border:1px solid var(--grey);background:var(--raise);border-radius:6px;padding:8px 12px;font-size:12px;color:var(--mute)}
+.chip.active{color:#151515;background:var(--gold);border-color:var(--gold);font-weight:700}
+.chip:disabled{opacity:.4}
+.ctl{padding:9px 0 3px}
+.ctl label{display:flex;justify-content:space-between;font-size:12px;color:var(--mute);margin-bottom:6px}
+.ctl output{color:var(--gold);font-variant-numeric:tabular-nums}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:28px;background:transparent;margin:0}
+input[type=range]::-webkit-slider-runnable-track{height:3px;background:var(--grey);border-radius:2px}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;height:22px;margin-top:-9.5px;border-radius:50%;background:var(--gold);border:3px solid var(--bg)}
+input[type=range]::-moz-range-track{height:3px;background:var(--grey)}
+input[type=range]::-moz-range-thumb{width:16px;height:16px;border-radius:50%;background:var(--gold);border:3px solid var(--bg)}
+.hint{font-size:11px;color:var(--mute);line-height:1.5;margin:8px 0}
+.row{display:flex;gap:8px;overflow-x:auto;padding:4px 0}
+.btn{border:0;border-radius:8px;padding:12px 14px;background:var(--gold);color:#151515;font-weight:700;font-size:14px;text-align:center}
+.btn.dark{background:var(--grey);color:var(--white)}
+.btn:disabled{opacity:.4}
+.btn.full{width:100%;display:block;margin-top:10px}
+.preset{flex:none;border:1px solid var(--grey);background:var(--raise);border-radius:8px;padding:10px 14px;font-size:13px}
+.preset:active{border-color:var(--gold)}
+h3{margin:12px 0 4px;font-size:14px;font-weight:700}
+select{width:100%;background:var(--raise);border:1px solid var(--grey);border-radius:8px;padding:11px;font-size:14px}
 #fileInput{display:none}
-.playbar{
- display:flex;align-items:center;gap:12px;margin-top:12px;
-}
-.playbar button{background:#303238;color:white;border:0;
- border-radius:50%;width:40px;height:40px}
-#timeLabel{font-size:11px;color:#aaa;white-space:nowrap}
-input[type=range]{width:100%;accent-color:#d6b46a}
-.timeline-track{
- height:38px;background:#292c32;border-radius:7px;
- margin-top:10px;overflow:hidden;display:flex;
-}
-.timeline-clip{
- flex:1;background:linear-gradient(110deg,#4b5c69,#89704e,#4b6658);
- border-right:2px solid #17191d;
-}
-.tabs{
- display:flex;gap:8px;overflow-x:auto;padding-bottom:5px;
-}
-.tab{
- flex:1;min-width:65px;border:1px solid #393b41;
- background:#26282e;color:#aaa;border-radius:9px;
- padding:11px 5px;font-size:11px;
-}
-.tab.active{background:#d6b46a;color:#171717;border-color:#d6b46a}
-.panel{display:none}
-.panel.active{display:block}
-.control{margin:18px 0}
-.control label{
- display:flex;justify-content:space-between;
- font-size:13px;margin-bottom:10px;
-}
-.control output{color:#d6b46a}
-.preset-row{display:flex;gap:8px;overflow-x:auto}
-.preset{
- background:#303238;border:1px solid #444;
- color:white;border-radius:8px;padding:10px;
- white-space:nowrap;font-size:12px;
-}
-.notice{font-size:12px;color:#aaa;line-height:1.5}
-.bottom{
- position:fixed;bottom:0;left:0;right:0;
- background:#191b20;border-top:1px solid #383a40;
- display:flex;justify-content:space-around;
- padding:10px 5px calc(10px + env(safe-area-inset-bottom));
- z-index:10;
-}
-.bottom button{
- flex:1;background:none;border:0;color:#aaa;
- font-size:10px;padding:5px;
-}
-.bottom button span{display:block;font-size:20px;margin-bottom:4px}
-.bottom button.active{color:#d6b46a}
+
+/* Barre de pages */
+.pages{flex:none;display:flex;background:var(--panel);border-top:1px solid var(--line);padding:4px 4px calc(4px + env(safe-area-inset-bottom))}
+.pages button{flex:1;border:0;background:none;color:var(--mute);font-size:11px;padding:7px 2px;border-radius:8px}
+.pages button span{display:block;font-size:19px;margin-bottom:2px}
+.pages button.active{color:var(--gold)}
+.pages button:disabled{opacity:.4}
 </style>
 </head>
-
 <body>
+<div id="app">
 
-<header>
- <div class="brand">MC STUDIO
-  <small>MERFIL COLOR STUDIO</small>
+ <div class="top">
+  <div class="brand">MC STUDIO<small>MERFIL COLOR STUDIO</small></div>
+  <div class="fname" id="fileName">Aucun média</div>
  </div>
- <div class="status">MOBILE EDITION · V1.0</div>
-</header>
 
-<main>
-
-<div class="section-title">Espace de création</div>
-
-<div class="card">
- <div class="viewer">
-  <div class="placeholder" id="placeholder">
-   <div class="symbol">✦</div>
-   <strong>Votre moniteur</strong>
-   <p>Importez votre première création</p>
-  </div>
+ <div class="monitor">
+  <div class="empty" id="placeholder"><div class="mark">✦</div><b>Moniteur vide</b>Appuyez sur Média pour importer une photo ou une vidéo.</div>
   <img id="imagePreview" alt="Aperçu de la photo">
   <video id="videoPreview" playsinline></video>
+  <span class="badge" id="badge">ORIGINAL</span>
+  <button class="ab" id="beforeButton">Avant</button>
  </div>
 
- <div class="toolbar">
-  <label class="btn upload" for="fileInput">＋ Importer un média</label>
-  <input type="file" id="fileInput" accept="image/*,video/*">
-  <button class="btn dark" id="beforeButton">Avant</button>
+ <div class="transport">
+  <button class="tbtn" id="prevFrame" aria-label="Image précédente">◂|</button>
+  <button class="tbtn play" id="playButton" aria-label="Lecture">▶</button>
+  <button class="tbtn" id="nextFrame" aria-label="Image suivante">|▸</button>
+  <span class="tc" id="timeLabel">00:00.00</span>
  </div>
 
- <div class="playbar">
-  <button id="playButton">▶</button>
-  <input type="range" id="seek" min="0" max="100" value="0">
-  <span id="timeLabel">00:00</span>
- </div>
-</div>
-
-<div class="section-title">Studio de traitement</div>
-
-<div class="card">
- <div class="tabs">
-  <button class="tab active" data-panel="color">◉ Couleur</button>
-  <button class="tab" data-panel="media">▧ Média</button>
-  <button class="tab" data-panel="timeline">▤ Timeline</button>
-  <button class="tab" data-panel="export">⇧ Export</button>
+ <div class="timeline" id="timeline">
+  <div class="ruler"></div>
+  <div class="track" id="trackLabel">Aucun clip</div>
+  <div class="head" id="playhead"></div>
  </div>
 
- <div class="panel active" id="color">
-  <h3>Étalonnage colorimétrique</h3>
-  <p class="notice">Ajustez progressivement l'apparence de votre image.</p>
+ <div class="panel-wrap">
 
-  <div class="control">
-   <label>Exposition <output id="exposureValue">0</output></label>
-   <input type="range" id="exposure" min="-100" max="100" value="0">
+  <!-- MÉDIA -->
+  <div class="panel active" id="media">
+   <h3>Bibliothèque</h3>
+   <p class="hint">Importez une photo ou une vidéo depuis votre iPhone. Le traitement reste sur votre téléphone.</p>
+   <label class="btn full" for="fileInput">＋ Importer un média</label>
+   <input type="file" id="fileInput" accept="image/*,video/*">
   </div>
 
-  <div class="control">
-   <label>Contraste <output id="contrastValue">100</output></label>
-   <input type="range" id="contrast" min="0" max="200" value="100">
+  <!-- COULEUR -->
+  <div class="panel" id="color">
+   <div class="sub">
+    <button class="chip active">Primaire</button>
+    <button class="chip" disabled>Roues · bientôt</button>
+    <button class="chip" disabled>Courbes · bientôt</button>
+    <button class="chip" disabled>HSL · bientôt</button>
+   </div>
+   <div class="ctl"><label>Exposition <output id="exposureValue">0</output></label><input type="range" id="exposure" min="-100" max="100" value="0"></div>
+   <div class="ctl"><label>Contraste <output id="contrastValue">100</output></label><input type="range" id="contrast" min="0" max="200" value="100"></div>
+   <div class="ctl"><label>Saturation <output id="saturationValue">100</output></label><input type="range" id="saturation" min="0" max="200" value="100"></div>
+   <div class="ctl"><label>Température <output id="temperatureValue">0</output></label><input type="range" id="temperature" min="-100" max="100" value="0"></div>
+   <div class="ctl"><label>Teinte <output id="hueValue">0</output></label><input type="range" id="hue" min="-90" max="90" value="0"></div>
+   <h3>Présélections</h3>
+   <div class="row">
+    <button class="preset" data-preset="cinema">Cinéma</button>
+    <button class="preset" data-preset="warm">Chaleureux</button>
+    <button class="preset" data-preset="cool">Froid</button>
+    <button class="preset" data-preset="reset">Naturel</button>
+   </div>
+   <button class="btn dark full" id="resetButton">Réinitialiser les réglages</button>
   </div>
 
-  <div class="control">
-   <label>Saturation <output id="saturationValue">100</output></label>
-   <input type="range" id="saturation" min="0" max="200" value="100">
+  <!-- MASQUES -->
+  <div class="panel" id="masks">
+   <h3>Masques et sélections</h3>
+   <p class="hint">Pinceau, gomme, sélection d’une personne ou du ciel : cette section arrive en phase 5. Rien n’est actif pour l’instant.</p>
   </div>
 
-  <div class="control">
-   <label>Température <output id="temperatureValue">0</output></label>
-   <input type="range" id="temperature" min="-100" max="100" value="0">
-  </div>
-
-  <div class="control">
-   <label>Teinte <output id="hueValue">0</output></label>
-   <input type="range" id="hue" min="-90" max="90" value="0">
-  </div>
-
-  <h3>Présélections</h3>
-  <div class="preset-row">
-   <button class="preset" data-preset="cinema">Cinéma</button>
-   <button class="preset" data-preset="warm">Chaleureux</button>
-   <button class="preset" data-preset="cool">Froid</button>
-   <button class="preset" data-preset="reset">Naturel</button>
-  </div>
-
-  <button class="btn dark" id="resetButton" style="width:100%;margin-top:17px">
-   Réinitialiser les réglages
-  </button>
- </div>
-
- <div class="panel" id="media">
-  <h3>Bibliothèque de médias</h3>
-  <p class="notice">Importez une photo ou une vidéo depuis votre iPhone.</p>
-  <label class="btn upload" for="fileInput">＋ Choisir un fichier</label>
-  <p id="fileName" class="notice">Aucun média importé.</p>
- </div>
-
- <div class="panel" id="timeline">
-  <h3>Timeline</h3>
-  <p class="notice">Aperçu de la lecture du média importé.</p>
-  <div class="timeline-track">
-   <div class="timeline-clip"></div>
-  </div>
-  <p class="notice">La timeline multipiste et le montage seront ajoutés dans une prochaine version.</p>
- </div>
-
- <div class="panel" id="export">
-  <h3>Exporter votre création</h3>
-  <p class="notice">Enregistrez votre photo retouchée en JPEG.</p>
-  <button class="btn" id="exportButton" style="width:100%">
-   Télécharger la photo JPEG
-  </button>
-  <p class="notice" id="exportMessage"></p>
-  <div style="margin-top:15px">
+  <!-- EXPORT -->
+  <div class="panel" id="export">
+   <h3>Photo</h3>
+   <select id="format">
+    <option value="image/jpeg">JPEG</option>
+    <option value="image/png">PNG</option>
+    <option value="image/webp">WebP</option>
+   </select>
+   <button class="btn full" id="exportButton">Télécharger la photo</button>
+   <p class="hint" id="exportMessage"></p>
    <h3>Vidéo</h3>
-   <p class="notice">L'export vidéo avec audio sera intégré dans une prochaine version.</p>
-   <button class="btn dark" disabled>Export vidéo · À venir</button>
+   <p class="hint">L’export vidéo avec audio sera ajouté dans une prochaine version.</p>
+   <button class="btn dark full" disabled>Export vidéo · à venir</button>
   </div>
+
  </div>
+
+ <nav class="pages">
+  <button class="active" data-panel="media"><span>▧</span>Média</button>
+  <button data-panel="color"><span>◉</span>Couleur</button>
+  <button data-panel="masks"><span>◌</span>Masques</button>
+  <button data-panel="export"><span>⇧</span>Export</button>
+ </nav>
 </div>
-
-</main>
-
-<nav class="bottom">
- <button class="active" data-panel="media"><span>▧</span>Médias</button>
- <button data-panel="timeline"><span>▤</span>Timeline</button>
- <button data-panel="color"><span>◉</span>Couleur</button>
- <button data-panel="export"><span>⇧</span>Export</button>
-</nav>
 
 <script>
 const $=id=>document.getElementById(id);
-const img=$('imagePreview');
-const video=$('videoPreview');
-let mediaType='';
-let mediaURL='';
-let original=false;
-
+const img=$('imagePreview'), video=$('videoPreview');
+let mediaType='', mediaURL='', original=false;
 const sliders=['exposure','contrast','saturation','temperature','hue'];
+const defaults={exposure:0,contrast:100,saturation:100,temperature:0,hue:0};
+const FPS=30; // pas image par image approximatif
 
-function values(){
+function values(){const v={};sliders.forEach(id=>v[id]=+$(id).value);return v}
+function params(v){
  return {
-  exposure:+$('exposure').value,
-  contrast:+$('contrast').value,
-  saturation:+$('saturation').value,
-  temperature:+$('temperature').value,
-  hue:+$('hue').value
+  brightness:(100+v.exposure)/100,
+  contrast:v.contrast/100,
+  saturate:v.saturation/100,
+  sepia:Math.max(0,v.temperature)/250,
+  hue:v.hue+Math.min(0,v.temperature)*.35
  };
 }
-
+function cssFilter(v){
+ const p=params(v);
+ return `brightness(${p.brightness*100}%) contrast(${p.contrast*100}%) saturate(${p.saturate*100}%) sepia(${p.sepia}) hue-rotate(${p.hue}deg)`;
+}
 function apply(){
  const v=values();
- sliders.forEach(id=>{
-  $(id+'Value').textContent=$(id).value;
- });
- const brightness=100+v.exposure;
- const sepia=Math.max(0,v.temperature)/250;
- const hue=v.hue+Math.min(0,v.temperature)*.35;
- const filter=`brightness(${brightness}%) contrast(${v.contrast}%) saturate(${v.saturation}%) sepia(${sepia}) hue-rotate(${hue}deg)`;
- img.style.filter=filter;
- video.style.filter=filter;
+ sliders.forEach(id=>$(id+'Value').textContent=$(id).value);
+ const f=original?'none':cssFilter(v);
+ img.style.filter=f; video.style.filter=f;
 }
-
 sliders.forEach(id=>$(id).addEventListener('input',apply));
+
+function setOriginal(on){
+ original=on;
+ $('beforeButton').textContent=on?'Après':'Avant';
+ $('beforeButton').classList.toggle('on',on);
+ $('badge').style.display=on?'block':'none';
+ apply();
+}
+$('beforeButton').addEventListener('click',()=>setOriginal(!original));
+
+function showMessage(t){$('placeholder').style.display='block';$('placeholder').innerHTML='<div class="mark">✦</div><b>'+t+'</b>'}
 
 $('fileInput').addEventListener('change',e=>{
  const file=e.target.files[0];
@@ -273,127 +224,140 @@ $('fileInput').addEventListener('change',e=>{
  if(mediaURL)URL.revokeObjectURL(mediaURL);
  mediaURL=URL.createObjectURL(file);
  $('placeholder').style.display='none';
- img.style.display='none';
- video.style.display='none';
+ img.style.display='none'; video.style.display='none';
  $('fileName').textContent=file.name;
- mediaType=file.type.startsWith('image/')?'image':
- file.type.startsWith('video/')?'video':'';
- if(mediaType==='image'){
-  img.src=mediaURL;
-  img.style.display='block';
- }else if(mediaType==='video'){
-  video.src=mediaURL;
-  video.style.display='block';
- }else{
-  $('placeholder').style.display='block';
-  $('placeholder').textContent='Format non pris en charge';
- }
- original=false;
- apply();
-});
-
-$('beforeButton').addEventListener('click',()=>{
- original=!original;
- img.style.filter=original?'none':'';
- video.style.filter=original?'none':'';
- if(!original)apply();
- $('beforeButton').textContent=original?'Après':'Avant';
+ $('trackLabel').textContent=file.name;
+ $('playButton').textContent='▶';
+ mediaType=file.type.startsWith('image/')?'image':file.type.startsWith('video/')?'video':'';
+ if(mediaType==='image'){img.src=mediaURL;img.style.display='block'}
+ else if(mediaType==='video'){video.src=mediaURL;video.style.display='block'}
+ else{mediaType='';showMessage('Format non pris en charge')}
+ setPlayhead(0); $('timeLabel').textContent=fmt(0);
+ setOriginal(false);
+ if(mediaType)goTo('color');
 });
 
 $('resetButton').addEventListener('click',()=>{
- $('exposure').value=0;
- $('contrast').value=100;
- $('saturation').value=100;
- $('temperature').value=0;
- $('hue').value=0;
- original=false;
- $('beforeButton').textContent='Avant';
- apply();
+ sliders.forEach(id=>$(id).value=defaults[id]);
+ setOriginal(false);
 });
-
-document.querySelectorAll('[data-preset]').forEach(button=>{
- button.addEventListener('click',()=>{
-  const p=button.dataset.preset;
-  const presets={
-   cinema:[-8,115,115,8,0],
-   warm:[5,105,115,35,0],
-   cool:[0,110,105,-30,0],
-   reset:[0,100,100,0,0]
-  };
-  sliders.forEach((id,i)=>$(id).value=presets[p][i]);
-  original=false;
-  $('beforeButton').textContent='Avant';
-  apply();
+// Double appui sur un curseur : retour à sa valeur d'origine
+sliders.forEach(id=>{
+ let last=0;
+ $(id).addEventListener('pointerup',()=>{
+  const now=Date.now();
+  if(now-last<300){$(id).value=defaults[id];apply()}
+  last=now;
  });
 });
 
-document.querySelectorAll('[data-panel]').forEach(button=>{
- button.addEventListener('click',()=>{
-  const name=button.dataset.panel;
-  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
-  $(name).classList.add('active');
-  document.querySelectorAll('[data-panel]').forEach(b=>b.classList.toggle('active',b.dataset.panel===name));
- });
-});
+const presets={cinema:[-8,115,115,8,0],warm:[5,105,115,35,0],cool:[0,110,105,-30,0],reset:[0,100,100,0,0]};
+document.querySelectorAll('[data-preset]').forEach(b=>b.addEventListener('click',()=>{
+ sliders.forEach((id,i)=>$(id).value=presets[b.dataset.preset][i]);
+ setOriginal(false);
+}));
 
+function goTo(name){
+ document.querySelectorAll('.panel').forEach(p=>p.classList.toggle('active',p.id===name));
+ document.querySelectorAll('.pages button').forEach(b=>b.classList.toggle('active',b.dataset.panel===name));
+}
+document.querySelectorAll('.pages button').forEach(b=>b.addEventListener('click',()=>goTo(b.dataset.panel)));
+
+/* Lecture, image par image, timeline */
+function fmt(s){
+ const m=Math.floor(s/60), sec=Math.floor(s%60), cs=Math.floor((s%1)*100);
+ return String(m).padStart(2,'0')+':'+String(sec).padStart(2,'0')+'.'+String(cs).padStart(2,'0');
+}
+function setPlayhead(ratio){
+ const tl=$('timeline').clientWidth-16;
+ $('playhead').style.left=(8+Math.max(0,Math.min(1,ratio))*tl)+'px';
+}
 $('playButton').addEventListener('click',()=>{
  if(mediaType!=='video')return;
- if(video.paused){
-  video.play();
-  $('playButton').textContent='Ⅱ';
- }else{
-  video.pause();
-  $('playButton').textContent='▶';
- }
+ if(video.paused){video.play();$('playButton').textContent='Ⅱ'}
+ else{video.pause();$('playButton').textContent='▶'}
 });
-
+function step(d){
+ if(mediaType!=='video'||!video.duration)return;
+ video.pause();$('playButton').textContent='▶';
+ video.currentTime=Math.max(0,Math.min(video.duration,video.currentTime+d/FPS));
+}
+$('prevFrame').addEventListener('click',()=>step(-1));
+$('nextFrame').addEventListener('click',()=>step(1));
 video.addEventListener('timeupdate',()=>{
  if(!video.duration)return;
- $('seek').value=video.currentTime/video.duration*100;
- $('timeLabel').textContent=formatTime(video.currentTime);
-});
-$('seek').addEventListener('input',()=>{
- if(mediaType==='video'&&video.duration){
-  video.currentTime=$('seek').value/100*video.duration;
- }
+ setPlayhead(video.currentTime/video.duration);
+ $('timeLabel').textContent=fmt(video.currentTime);
 });
 video.addEventListener('ended',()=>$('playButton').textContent='▶');
 
-function formatTime(s){
- const m=Math.floor(s/60);
- const sec=Math.floor(s%60);
- return String(m).padStart(2,'0')+':'+String(sec).padStart(2,'0');
+function scrub(e){
+ if(mediaType!=='video'||!video.duration)return;
+ const r=$('timeline').getBoundingClientRect();
+ const ratio=Math.max(0,Math.min(1,(e.clientX-r.left-8)/(r.width-16)));
+ video.currentTime=ratio*video.duration;
+ setPlayhead(ratio);
 }
+let dragging=false;
+$('timeline').addEventListener('pointerdown',e=>{dragging=true;$('timeline').setPointerCapture(e.pointerId);scrub(e)});
+$('timeline').addEventListener('pointermove',e=>{if(dragging)scrub(e)});
+$('timeline').addEventListener('pointerup',()=>dragging=false);
+window.addEventListener('resize',()=>{if(mediaType==='video'&&video.duration)setPlayhead(video.currentTime/video.duration)});
+
+/* Export photo : calcul pixel par pixel (Safari iPhone ne gère pas ctx.filter) */
+function mul(A,B){
+ const R=[];
+ for(let i=0;i<3;i++){R.push([]);for(let j=0;j<3;j++)R[i].push(A[i][0]*B[0][j]+A[i][1]*B[1][j]+A[i][2]*B[2][j])}
+ return R;
+}
+function colorMatrix(p){
+ const s=p.saturate;
+ const Sa=[[.213+.787*s,.715-.715*s,.072-.072*s],[.213-.213*s,.715+.285*s,.072-.072*s],[.213-.213*s,.715-.715*s,.072+.928*s]];
+ const t=1-p.sepia;
+ const Se=[[.393+.607*t,.769-.769*t,.189-.189*t],[.349-.349*t,.686+.314*t,.168-.168*t],[.272-.272*t,.534-.534*t,.131+.869*t]];
+ const a=p.hue*Math.PI/180, c=Math.cos(a), n=Math.sin(a);
+ const H=[[.213+c*.787-n*.213,.715-c*.715-n*.715,.072-c*.072+n*.928],
+          [.213-c*.213+n*.143,.715+c*.285+n*.140,.072-c*.072-n*.283],
+          [.213-c*.213-n*.787,.715-c*.715+n*.715,.072+c*.928+n*.072]];
+ return mul(H,mul(Se,Sa));
+}
+const clamp=x=>x<0?0:x>1?1:x;
 
 $('exportButton').addEventListener('click',()=>{
- if(mediaType!=='image'||!img.naturalWidth){
-  $('exportMessage').textContent='Importez une photo pour utiliser cet export JPEG.';
-  return;
- }
- const v=values();
- const canvas=document.createElement('canvas');
- canvas.width=img.naturalWidth;
- canvas.height=img.naturalHeight;
- const ctx=canvas.getContext('2d');
- const brightness=100+v.exposure;
- const sepia=Math.max(0,v.temperature)/250;
- const hue=v.hue+Math.min(0,v.temperature)*.35;
- ctx.filter=`brightness(${brightness}%) contrast(${v.contrast}%) saturate(${v.saturation}%) sepia(${sepia}) hue-rotate(${hue}deg)`;
- ctx.drawImage(img,0,0);
- canvas.toBlob(blob=>{
-  if(!blob){
-   $('exportMessage').textContent='Export impossible pour ce fichier.';
-   return;
-  }
-  const link=document.createElement('a');
-  const url=URL.createObjectURL(blob);
-  link.href=url;
-  link.download='MC-Studio-creation.jpg';
-  link.click();
-  setTimeout(()=>URL.revokeObjectURL(url),1500);
-  $('exportMessage').textContent='Votre JPEG est prêt.';
- },'image/jpeg',.94);
+ const msg=$('exportMessage');
+ if(mediaType!=='image'||!img.naturalWidth){msg.textContent='Importez une photo pour utiliser cet export.';return}
+ msg.textContent='Traitement en cours…';
+ setTimeout(()=>{
+  try{
+   const type=$('format').value;
+   const ext={'image/jpeg':'jpg','image/png':'png','image/webp':'webp'}[type];
+   const canvas=document.createElement('canvas');
+   canvas.width=img.naturalWidth; canvas.height=img.naturalHeight;
+   const ctx=canvas.getContext('2d');
+   ctx.drawImage(img,0,0);
+   const p=params(values());
+   const data=ctx.getImageData(0,0,canvas.width,canvas.height);
+   const d=data.data, M=colorMatrix(p);
+   for(let i=0;i<d.length;i+=4){
+    let r=clamp(d[i]/255*p.brightness), g=clamp(d[i+1]/255*p.brightness), b=clamp(d[i+2]/255*p.brightness);
+    r=clamp((r-.5)*p.contrast+.5); g=clamp((g-.5)*p.contrast+.5); b=clamp((b-.5)*p.contrast+.5);
+    d[i]=clamp(M[0][0]*r+M[0][1]*g+M[0][2]*b)*255;
+    d[i+1]=clamp(M[1][0]*r+M[1][1]*g+M[1][2]*b)*255;
+    d[i+2]=clamp(M[2][0]*r+M[2][1]*g+M[2][2]*b)*255;
+   }
+   ctx.putImageData(data,0,0);
+   canvas.toBlob(blob=>{
+    if(!blob){msg.textContent='Export impossible pour ce fichier ou ce format.';return}
+    const a=document.createElement('a'), url=URL.createObjectURL(blob);
+    a.href=url; a.download='MC-Studio-creation.'+ext; a.click();
+    setTimeout(()=>URL.revokeObjectURL(url),1500);
+    msg.textContent='Votre fichier '+ext.toUpperCase()+' est prêt.';
+   },type,.94);
+  }catch(err){msg.textContent='Erreur pendant l’export : photo trop lourde pour cet appareil.'}
+ },30);
 });
+
+apply();
 </script>
 </body>
 </html>
