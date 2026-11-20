@@ -64,6 +64,9 @@ h3{margin:12px 0 4px;font-size:14px;font-weight:700}
  background:radial-gradient(circle,rgba(92,96,104,1) 0%,rgba(92,96,104,0) 75%),conic-gradient(#e0453a,#e8d34a,#52d36a,#3fd0d0,#3f6fe0,#d34fd0,#e0453a)}
 .puck{position:absolute;left:50%;top:50%;width:16px;height:16px;margin:-8px 0 0 -8px;border-radius:50%;border:2px solid #fff;background:rgba(0,0,0,.4);pointer-events:none}
 .wm{margin-top:6px}
+.swrow{display:flex;justify-content:space-between;padding:12px 0 4px}
+.sw{width:34px;height:34px;border-radius:50%;border:3px solid transparent;padding:0;background-clip:padding-box;box-shadow:inset 0 0 0 2px var(--panel)}
+.sw.active{border-color:var(--white)}
 select{width:100%;background:var(--raise);border:1px solid var(--grey);border-radius:8px;padding:11px;font-size:14px}
 #fileInput{display:none}
 .pages{flex:none;display:flex;background:var(--panel);border-top:1px solid var(--line);padding:4px 4px calc(4px + env(safe-area-inset-bottom))}
@@ -116,10 +119,17 @@ select{width:100%;background:var(--raise);border:1px solid var(--grey);border-ra
     <button class="chip" data-g="t">Tons</button>
     <button class="chip" data-g="e">Effets</button>
     <button class="chip" data-g="w">Roues</button>
+    <button class="chip" data-g="h">HSL</button>
     <button class="chip" disabled>Courbes · bientôt</button>
    </div>
    <div id="sliders"></div>
    <div class="wheels" id="wheels"></div>
+   <div id="hsl" style="display:none">
+    <div class="swrow" id="swrow"></div>
+    <div class="ctl"><label>Teinte <output id="hsl_hV">0</output></label><input type="range" id="hsl_h" min="-100" max="100" value="0"></div>
+    <div class="ctl"><label>Saturation <output id="hsl_sV">0</output></label><input type="range" id="hsl_s" min="-100" max="100" value="0"></div>
+    <div class="ctl"><label>Luminosité <output id="hsl_lV">0</output></label><input type="range" id="hsl_l" min="-100" max="100" value="0"></div>
+   </div>
    <h3>Présélections</h3>
    <div class="row">
     <button class="preset" data-preset="cinema">Cinéma</button>
@@ -184,8 +194,9 @@ S.forEach(([id,label,min,max,def,g])=>{
  `<div class="ctl" data-g="${g}"><label>${label} <output id="${id}Value">${def}</output></label><input type="range" id="${id}" min="${min}" max="${max}" value="${def}"></div>`);
 });
 function showGroup(g){
- document.querySelectorAll('.ctl').forEach(c=>c.style.display=c.dataset.g===g?'block':'none');
+ document.querySelectorAll('#sliders .ctl').forEach(c=>c.style.display=c.dataset.g===g?'block':'none');
  $('wheels').style.display=g==='w'?'grid':'none';
+ $('hsl').style.display=g==='h'?'block':'none';
  document.querySelectorAll('.chip[data-g]').forEach(c=>c.classList.toggle('active',c.dataset.g===g));
 }
 document.querySelectorAll('.chip[data-g]').forEach(c=>c.addEventListener('click',()=>showGroup(c.dataset.g)));
@@ -228,12 +239,32 @@ function wheelTint(w){
  return rgb.map(x=>(x-m)*r);
 }
 
+
+/* ---------- HSL par couleur ---------- */
+const HC=[['Rouge','#e0453a',0],['Orange','#ee8a2f',30],['Jaune','#e8d34a',60],['Vert','#52d36a',120],['Cyan','#3fd0d0',180],['Bleu','#3f6fe0',225],['Violet','#8a55d8',270],['Magenta','#d34fd0',315]];
+const HSL=HC.map(()=>({h:0,s:0,l:0}));
+let sel=0;
+HC.forEach(([n,col],i)=>$('swrow').insertAdjacentHTML('beforeend',`<button class="sw${i?'':' active'}" data-i="${i}" style="background:${col}" aria-label="${n}"></button>`));
+function showHSL(){
+ const o=HSL[sel];
+ [['h',o.h],['s',o.s],['l',o.l]].forEach(([k,v])=>{$('hsl_'+k).value=v;$('hsl_'+k+'V').textContent=v});
+ document.querySelectorAll('.sw').forEach(b=>b.classList.toggle('active',+b.dataset.i===sel));
+}
+document.querySelectorAll('.sw').forEach(b=>b.addEventListener('click',()=>{sel=+b.dataset.i;showHSL()}));
+['h','s','l'].forEach(k=>$('hsl_'+k).addEventListener('input',e=>{
+ HSL[sel][k]=+e.target.value;$('hsl_'+k+'V').textContent=e.target.value;draw();
+}));
+function resetHSL(){HSL.forEach(o=>o.h=o.s=o.l=0);showHSL()}
+
 /* ---------- Moteur WebGL ---------- */
 const gl=cv.getContext('webgl',{preserveDrawingBuffer:true,antialias:false});
 const VS=`attribute vec2 p;varying vec2 v;void main(){v=p*.5+.5;gl_Position=vec4(p,0.,1.);}`;
 const FS=`precision highp float;varying vec2 v;uniform sampler2D t;uniform vec2 px;
 uniform float ex,co,sa,vi,te,ti,sh,hi,vg,sp;
 uniform vec3 li,ga,gn;
+uniform vec4 hs[8];uniform float uh;
+vec3 rgb2hsv(vec3 c){vec4 K=vec4(0.,-1./3.,2./3.,-1.);vec4 p=mix(vec4(c.bg,K.wz),vec4(c.gb,K.xy),step(c.b,c.g));vec4 q=mix(vec4(p.xyw,c.r),vec4(c.r,p.yzx),step(p.x,c.r));float d=q.x-q.y;float e=1.0e-6;return vec3(abs(q.z+(q.w-q.y)/(6.*d+e)),d/(q.x+e),q.x);}
+vec3 hsv2rgb(vec3 c){vec4 K=vec4(1.,2./3.,1./3.,3.);vec3 p=abs(fract(c.xxx+K.xyz)*6.-K.www);return c.z*mix(K.xxx,clamp(p-K.xxx,0.,1.),c.y);}
 void main(){
  vec3 c=texture2D(t,v).rgb;
  if(sp>0.){
@@ -253,6 +284,20 @@ void main(){
  l=dot(c,vec3(.2126,.7152,.0722));
  float chroma=max(c.r,max(c.g,c.b))-min(c.r,min(c.g,c.b));
  c=mix(vec3(l),c,sa*(1.+vi*(1.-chroma)));
+ if(uh>.5){
+  vec3 q=rgb2hsv(clamp(c,0.,1.));
+  float dh=0.,ds=0.,dl=0.;
+  for(int i=0;i<8;i++){
+   float d=abs(q.x-hs[i].w);d=min(d,1.-d);
+   float w=max(0.,1.-d*9.);
+   dh+=w*hs[i].x;ds+=w*hs[i].y;dl+=w*hs[i].z;
+  }
+  float k=smoothstep(0.,.12,q.y);
+  q.x=fract(q.x+dh*k*.0833+1.);
+  q.y=clamp(q.y*(1.+ds*k),0.,1.);
+  q.z=clamp(q.z*(1.+dl*k*.6),0.,1.);
+  c=hsv2rgb(q);
+ }
  c*=1.-vg*smoothstep(.25,.75,length(v-.5));
  gl_FragColor=vec4(clamp(c,0.,1.),1.);
 }`;
@@ -266,7 +311,7 @@ if(gl){
  const buf=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,buf);
  gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,1,1]),gl.STATIC_DRAW);
  const loc=gl.getAttribLocation(prog,'p');gl.enableVertexAttribArray(loc);gl.vertexAttribPointer(loc,2,gl.FLOAT,false,0,0);
- ['t','px','ex','co','sa','vi','te','ti','sh','hi','vg','sp','li','ga','gn'].forEach(n=>U[n]=gl.getUniformLocation(prog,n));
+ ['t','px','ex','co','sa','vi','te','ti','sh','hi','vg','sp','li','ga','gn','hs','uh'].forEach(n=>U[n]=gl.getUniformLocation(prog,n));
  tex=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,tex);
  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true);
  [[gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE],[gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE],[gl.TEXTURE_MIN_FILTER,gl.LINEAR],[gl.TEXTURE_MAG_FILTER,gl.LINEAR]]
@@ -300,6 +345,11 @@ function draw(){
  const ll=original?0:W.lift.l/100,lg=original?0:W.gamma.l/100,ln=original?0:W.gain.l/100;
  gl.uniform3f(U.li,tl[0]*.3+ll*.15,tl[1]*.3+ll*.15,tl[2]*.3+ll*.15);
  gl.uniform3f(U.ga,Math.max(.3,1+tg[0]*.6+lg*.5),Math.max(.3,1+tg[1]*.6+lg*.5),Math.max(.3,1+tg[2]*.6+lg*.5));
+ {
+  const a=new Float32Array(32);let on=0;
+  HSL.forEach((o,i)=>{a.set([o.h/100,o.s/100,o.l/100,HC[i][2]/360],i*4);if(o.h||o.s||o.l)on=1});
+  gl.uniform4fv(U.hs,a);gl.uniform1f(U.uh,original?0:on);
+ }
  gl.uniform3f(U.gn,1+tn[0]*.6+ln*.5,1+tn[1]*.6+ln*.5,1+tn[2]*.6+ln*.5);
  gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
 }
@@ -382,7 +432,7 @@ video.addEventListener('error',()=>showMessage('Vidéo illisible sur ce navigate
 
 $('resetButton').addEventListener('click',()=>{
  ids.forEach(id=>$(id).value=defaults[id]);
- resetWheels();
+ resetWheels();resetHSL();
  setOriginal(false);apply();
 });
 const presets={
@@ -394,7 +444,7 @@ const presets={
 document.querySelectorAll('[data-preset]').forEach(b=>b.addEventListener('click',()=>{
  const p=presets[b.dataset.preset];
  ids.forEach(id=>$(id).value=(id in p)?p[id]:defaults[id]);
- resetWheels();
+ resetWheels();resetHSL();
  if(b.dataset.preset==='cinema'){setWheel('lift',200,.3);setWheel('gain',30,.3)}
  setOriginal(false);apply();
 }));
