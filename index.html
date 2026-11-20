@@ -67,6 +67,7 @@ h3{margin:12px 0 4px;font-size:14px;font-weight:700}
 .swrow{display:flex;justify-content:space-between;padding:12px 0 4px}
 .sw{width:34px;height:34px;border-radius:50%;border:3px solid transparent;padding:0;background-clip:padding-box;box-shadow:inset 0 0 0 2px var(--panel)}
 .sw.active{border-color:var(--white)}
+.cvs{display:block;width:100%;max-width:260px;aspect-ratio:1;margin:10px auto 4px;border-radius:8px;border:1px solid var(--grey);touch-action:none;background:#0c0d10}
 select{width:100%;background:var(--raise);border:1px solid var(--grey);border-radius:8px;padding:11px;font-size:14px}
 #fileInput{display:none}
 .pages{flex:none;display:flex;background:var(--panel);border-top:1px solid var(--line);padding:4px 4px calc(4px + env(safe-area-inset-bottom))}
@@ -120,10 +121,21 @@ select{width:100%;background:var(--raise);border:1px solid var(--grey);border-ra
     <button class="chip" data-g="e">Effets</button>
     <button class="chip" data-g="w">Roues</button>
     <button class="chip" data-g="h">HSL</button>
-    <button class="chip" disabled>Courbes · bientôt</button>
+    <button class="chip" data-g="c">Courbes</button>
    </div>
    <div id="sliders"></div>
    <div class="wheels" id="wheels"></div>
+   <div id="curves" style="display:none">
+    <div class="sub" id="cvch">
+     <button class="chip active" data-c="m">Maître</button>
+     <button class="chip" data-c="r">Rouge</button>
+     <button class="chip" data-c="g">Vert</button>
+     <button class="chip" data-c="b">Bleu</button>
+    </div>
+    <canvas id="cvs" class="cvs" width="320" height="320"></canvas>
+    <p class="hint">Touchez la courbe pour ajouter un point, glissez pour la déformer. Double appui sur un point pour le supprimer.</p>
+    <button class="btn dark full" id="cvReset">Réinitialiser cette courbe</button>
+   </div>
    <div id="hsl" style="display:none">
     <div class="swrow" id="swrow"></div>
     <div class="ctl"><label>Teinte <output id="hsl_hV">0</output></label><input type="range" id="hsl_h" min="-100" max="100" value="0"></div>
@@ -197,6 +209,8 @@ function showGroup(g){
  document.querySelectorAll('#sliders .ctl').forEach(c=>c.style.display=c.dataset.g===g?'block':'none');
  $('wheels').style.display=g==='w'?'grid':'none';
  $('hsl').style.display=g==='h'?'block':'none';
+ $('curves').style.display=g==='c'?'block':'none';
+ if(g==='c'&&typeof drawCurve==='function')drawCurve();
  document.querySelectorAll('.chip[data-g]').forEach(c=>c.classList.toggle('active',c.dataset.g===g));
 }
 document.querySelectorAll('.chip[data-g]').forEach(c=>c.addEventListener('click',()=>showGroup(c.dataset.g)));
@@ -256,13 +270,96 @@ document.querySelectorAll('.sw').forEach(b=>b.addEventListener('click',()=>{sel=
 }));
 function resetHSL(){HSL.forEach(o=>o.h=o.s=o.l=0);showHSL()}
 
+
+/* ---------- Courbes RGB ---------- */
+const CV={m:[{x:0,y:0},{x:1,y:1}],r:[{x:0,y:0},{x:1,y:1}],g:[{x:0,y:0},{x:1,y:1}],b:[{x:0,y:0},{x:1,y:1}]};
+const CCOL={m:'#f5f5f5',r:'#e0453a',g:'#52d36a',b:'#3f6fe0'};
+let cvCh='m',curvesOn=false,lutTex=null;
+function makeSpline(P){
+ const n=P.length,d=[],m=[],t=[];
+ for(let i=0;i<n-1;i++){d[i]=P[i+1].x-P[i].x;m[i]=(P[i+1].y-P[i].y)/d[i]}
+ t[0]=m[0];t[n-1]=m[n-2];
+ for(let i=1;i<n-1;i++)t[i]=m[i-1]*m[i]<=0?0:(m[i-1]+m[i])/2;
+ for(let i=0;i<n-1;i++){
+  if(m[i]===0){t[i]=t[i+1]=0;continue}
+  const a=t[i]/m[i],b=t[i+1]/m[i],q=a*a+b*b;
+  if(q>9){const k=3/Math.sqrt(q);t[i]=k*a*m[i];t[i+1]=k*b*m[i]}
+ }
+ return x=>{
+  if(x<=P[0].x)return P[0].y;
+  if(x>=P[n-1].x)return P[n-1].y;
+  let i=0;while(i<n-2&&x>P[i+1].x)i++;
+  const h=d[i],u=(x-P[i].x)/h,u2=u*u,u3=u2*u;
+  return (2*u3-3*u2+1)*P[i].y+(u3-2*u2+u)*h*t[i]+(-2*u3+3*u2)*P[i+1].y+(u3-u2)*h*t[i+1];
+ };
+}
+const isId=P=>P.length===2&&P[0].y===0&&P[1].y===1;
+function uploadLUT(){
+ curvesOn=!(isId(CV.m)&&isId(CV.r)&&isId(CV.g)&&isId(CV.b));
+ if(gl&&lutTex){
+  const f={r:makeSpline(CV.r),g:makeSpline(CV.g),b:makeSpline(CV.b),m:makeSpline(CV.m)};
+  const a=new Uint8Array(1024),cl=v=>Math.round(Math.max(0,Math.min(1,v))*255);
+  for(let i=0;i<256;i++){const x=i/255;a[i*4]=cl(f.r(x));a[i*4+1]=cl(f.g(x));a[i*4+2]=cl(f.b(x));a[i*4+3]=cl(f.m(x))}
+  gl.activeTexture(gl.TEXTURE1);gl.bindTexture(gl.TEXTURE_2D,lutTex);
+  gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,256,1,0,gl.RGBA,gl.UNSIGNED_BYTE,a);
+  gl.activeTexture(gl.TEXTURE0);
+ }
+}
+function drawCurve(){
+ const c=$('cvs'),x=c.getContext('2d'),S=c.width,P=CV[cvCh];
+ x.clearRect(0,0,S,S);x.fillStyle='#0c0d10';x.fillRect(0,0,S,S);
+ x.strokeStyle='#2a2d33';x.lineWidth=1;
+ for(let i=1;i<4;i++){x.beginPath();x.moveTo(i*S/4,0);x.lineTo(i*S/4,S);x.moveTo(0,i*S/4);x.lineTo(S,i*S/4);x.stroke()}
+ x.strokeStyle='#454a52';x.beginPath();x.moveTo(0,S);x.lineTo(S,0);x.stroke();
+ const f=makeSpline(P);
+ x.strokeStyle=CCOL[cvCh];x.lineWidth=3;x.beginPath();
+ for(let i=0;i<=S;i+=2){const px=i,py=S-f(i/S)*S;i?x.lineTo(px,py):x.moveTo(px,py)}
+ x.stroke();
+ P.forEach(p=>{x.beginPath();x.arc(p.x*S,S-p.y*S,9,0,7);x.fillStyle='#101114';x.fill();x.lineWidth=3;x.strokeStyle=CCOL[cvCh];x.stroke()});
+}
+(function(){
+ const c=$('cvs');let drag=-1,lastTap=0,lastIdx=-2;
+ const pos=e=>{const r=c.getBoundingClientRect();return{x:(e.clientX-r.left)/r.width,y:1-(e.clientY-r.top)/r.height,w:r.width}};
+ const cl=v=>Math.max(0,Math.min(1,v));
+ const changed=()=>{uploadLUT();drawCurve();draw()};
+ c.addEventListener('pointerdown',e=>{
+  const p=pos(e),P=CV[cvCh];let idx=-1,best=24/p.w;
+  P.forEach((q,i)=>{const d=Math.hypot(q.x-p.x,q.y-p.y);if(d<best){best=d;idx=i}});
+  const now=Date.now();
+  if(idx>0&&idx<P.length-1&&now-lastTap<350&&lastIdx===idx){P.splice(idx,1);lastIdx=-2;changed();return}
+  lastTap=now;lastIdx=idx;
+  if(idx<0){
+   const q={x:cl(p.x),y:cl(p.y)};
+   if(q.x<.02||q.x>.98)return;
+   if(P.some(o=>Math.abs(o.x-q.x)<.03))return;
+   P.push(q);P.sort((a,b)=>a.x-b.x);idx=P.indexOf(q);lastIdx=idx;
+  }
+  drag=idx;c.setPointerCapture(e.pointerId);changed();
+ });
+ c.addEventListener('pointermove',e=>{
+  if(drag<0)return;
+  const p=pos(e),P=CV[cvCh],q=P[drag];
+  q.y=cl(p.y);
+  if(drag>0&&drag<P.length-1)q.x=Math.max(P[drag-1].x+.02,Math.min(P[drag+1].x-.02,cl(p.x)));
+  changed();
+ });
+ ['pointerup','pointercancel'].forEach(ev=>c.addEventListener(ev,()=>drag=-1));
+})();
+document.querySelectorAll('#cvch .chip').forEach(b=>b.addEventListener('click',()=>{
+ cvCh=b.dataset.c;
+ document.querySelectorAll('#cvch .chip').forEach(o=>o.classList.toggle('active',o===b));
+ drawCurve();
+}));
+$('cvReset').addEventListener('click',()=>{CV[cvCh]=[{x:0,y:0},{x:1,y:1}];uploadLUT();drawCurve();draw()});
+function resetCurves(){['m','r','g','b'].forEach(k=>CV[k]=[{x:0,y:0},{x:1,y:1}]);uploadLUT();drawCurve()}
+
 /* ---------- Moteur WebGL ---------- */
 const gl=cv.getContext('webgl',{preserveDrawingBuffer:true,antialias:false});
 const VS=`attribute vec2 p;varying vec2 v;void main(){v=p*.5+.5;gl_Position=vec4(p,0.,1.);}`;
 const FS=`precision highp float;varying vec2 v;uniform sampler2D t;uniform vec2 px;
 uniform float ex,co,sa,vi,te,ti,sh,hi,vg,sp;
 uniform vec3 li,ga,gn;
-uniform vec4 hs[8];uniform float uh;
+uniform vec4 hs[8];uniform float uh;uniform sampler2D cu;uniform float uc;
 vec3 rgb2hsv(vec3 c){vec4 K=vec4(0.,-1./3.,2./3.,-1.);vec4 p=mix(vec4(c.bg,K.wz),vec4(c.gb,K.xy),step(c.b,c.g));vec4 q=mix(vec4(p.xyw,c.r),vec4(c.r,p.yzx),step(p.x,c.r));float d=q.x-q.y;float e=1.0e-6;return vec3(abs(q.z+(q.w-q.y)/(6.*d+e)),d/(q.x+e),q.x);}
 vec3 hsv2rgb(vec3 c){vec4 K=vec4(1.,2./3.,1./3.,3.);vec3 p=abs(fract(c.xxx+K.xyz)*6.-K.www);return c.z*mix(K.xxx,clamp(p-K.xxx,0.,1.),c.y);}
 void main(){
@@ -298,6 +395,12 @@ void main(){
   q.z=clamp(q.z*(1.+dl*k*.6),0.,1.);
   c=hsv2rgb(q);
  }
+ if(uc>.5){
+  vec3 x=clamp(c,0.,1.)*.99609375+.001953125;
+  vec3 mc=vec3(texture2D(cu,vec2(x.r,.5)).a,texture2D(cu,vec2(x.g,.5)).a,texture2D(cu,vec2(x.b,.5)).a);
+  x=mc*.99609375+.001953125;
+  c=vec3(texture2D(cu,vec2(x.r,.5)).r,texture2D(cu,vec2(x.g,.5)).g,texture2D(cu,vec2(x.b,.5)).b);
+ }
  c*=1.-vg*smoothstep(.25,.75,length(v-.5));
  gl_FragColor=vec4(clamp(c,0.,1.),1.);
 }`;
@@ -311,11 +414,17 @@ if(gl){
  const buf=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,buf);
  gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,1,1]),gl.STATIC_DRAW);
  const loc=gl.getAttribLocation(prog,'p');gl.enableVertexAttribArray(loc);gl.vertexAttribPointer(loc,2,gl.FLOAT,false,0,0);
- ['t','px','ex','co','sa','vi','te','ti','sh','hi','vg','sp','li','ga','gn','hs','uh'].forEach(n=>U[n]=gl.getUniformLocation(prog,n));
+ ['t','px','ex','co','sa','vi','te','ti','sh','hi','vg','sp','li','ga','gn','hs','uh','cu','uc'].forEach(n=>U[n]=gl.getUniformLocation(prog,n));
  tex=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,tex);
  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true);
  [[gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE],[gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE],[gl.TEXTURE_MIN_FILTER,gl.LINEAR],[gl.TEXTURE_MAG_FILTER,gl.LINEAR]]
   .forEach(([a,b])=>gl.texParameteri(gl.TEXTURE_2D,a,b));
+ gl.activeTexture(gl.TEXTURE1);
+ lutTex=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,lutTex);
+ [[gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE],[gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE],[gl.TEXTURE_MIN_FILTER,gl.LINEAR],[gl.TEXTURE_MAG_FILTER,gl.LINEAR]]
+  .forEach(([a,b])=>gl.texParameteri(gl.TEXTURE_2D,a,b));
+ gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,tex);
+ uploadLUT();
 }else{
  $('placeholder').innerHTML='<div class="mark">✦</div><b>WebGL indisponible</b>Ce navigateur ne peut pas lancer le moteur d’image.';
 }
@@ -350,6 +459,7 @@ function draw(){
   HSL.forEach((o,i)=>{a.set([o.h/100,o.s/100,o.l/100,HC[i][2]/360],i*4);if(o.h||o.s||o.l)on=1});
   gl.uniform4fv(U.hs,a);gl.uniform1f(U.uh,original?0:on);
  }
+ gl.uniform1i(U.cu,1);gl.uniform1f(U.uc,original?0:(curvesOn?1:0));
  gl.uniform3f(U.gn,1+tn[0]*.6+ln*.5,1+tn[1]*.6+ln*.5,1+tn[2]*.6+ln*.5);
  gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
 }
@@ -432,7 +542,7 @@ video.addEventListener('error',()=>showMessage('Vidéo illisible sur ce navigate
 
 $('resetButton').addEventListener('click',()=>{
  ids.forEach(id=>$(id).value=defaults[id]);
- resetWheels();resetHSL();
+ resetWheels();resetHSL();resetCurves();
  setOriginal(false);apply();
 });
 const presets={
@@ -444,7 +554,7 @@ const presets={
 document.querySelectorAll('[data-preset]').forEach(b=>b.addEventListener('click',()=>{
  const p=presets[b.dataset.preset];
  ids.forEach(id=>$(id).value=(id in p)?p[id]:defaults[id]);
- resetWheels();resetHSL();
+ resetWheels();resetHSL();resetCurves();
  if(b.dataset.preset==='cinema'){setWheel('lift',200,.3);setWheel('gain',30,.3)}
  setOriginal(false);apply();
 }));
