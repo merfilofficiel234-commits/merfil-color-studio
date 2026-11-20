@@ -1,0 +1,399 @@
+
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#101114">
+<title>MC Studio | Merfil Color Studio</title>
+
+<style>
+*{box-sizing:border-box}
+body{
+ margin:0;background:#101114;color:#f5f5f5;
+ font-family:-apple-system,BlinkMacSystemFont,Arial,sans-serif;
+}
+button,input{font:inherit}
+header{
+ height:65px;padding:10px 16px;
+ display:flex;align-items:center;justify-content:space-between;
+ background:#191b20;border-bottom:1px solid #303238;
+ position:sticky;top:0;z-index:5;
+}
+.brand{font-size:21px;font-weight:900;color:#d6b46a;letter-spacing:1px}
+.brand small{display:block;font-size:9px;color:#aaa;letter-spacing:2px;margin-top:3px}
+.status{font-size:10px;color:#aaa}
+main{padding:14px 13px 100px;max-width:650px;margin:auto}
+.section-title{font-size:17px;font-weight:700;margin:8px 0 12px}
+.card{
+ background:#1b1d22;border:1px solid #303238;
+ border-radius:14px;padding:13px;margin-bottom:13px;
+}
+.viewer{
+ background:#050607;border-radius:10px;
+ height:260px;display:flex;align-items:center;
+ justify-content:center;overflow:hidden;position:relative;
+}
+#imagePreview,#videoPreview{
+ display:none;width:100%;height:100%;object-fit:contain;
+}
+.placeholder{text-align:center;color:#858585;padding:20px}
+.placeholder .symbol{font-size:40px;color:#d6b46a}
+.toolbar{display:flex;gap:9px;margin-top:12px}
+.btn{
+ border:0;border-radius:9px;padding:12px 14px;
+ background:#d6b46a;color:#151515;font-weight:700;
+}
+.btn.dark{background:#303238;color:white}
+.btn:disabled{opacity:.45}
+.upload{flex:1;text-align:center;cursor:pointer}
+#fileInput{display:none}
+.playbar{
+ display:flex;align-items:center;gap:12px;margin-top:12px;
+}
+.playbar button{background:#303238;color:white;border:0;
+ border-radius:50%;width:40px;height:40px}
+#timeLabel{font-size:11px;color:#aaa;white-space:nowrap}
+input[type=range]{width:100%;accent-color:#d6b46a}
+.timeline-track{
+ height:38px;background:#292c32;border-radius:7px;
+ margin-top:10px;overflow:hidden;display:flex;
+}
+.timeline-clip{
+ flex:1;background:linear-gradient(110deg,#4b5c69,#89704e,#4b6658);
+ border-right:2px solid #17191d;
+}
+.tabs{
+ display:flex;gap:8px;overflow-x:auto;padding-bottom:5px;
+}
+.tab{
+ flex:1;min-width:65px;border:1px solid #393b41;
+ background:#26282e;color:#aaa;border-radius:9px;
+ padding:11px 5px;font-size:11px;
+}
+.tab.active{background:#d6b46a;color:#171717;border-color:#d6b46a}
+.panel{display:none}
+.panel.active{display:block}
+.control{margin:18px 0}
+.control label{
+ display:flex;justify-content:space-between;
+ font-size:13px;margin-bottom:10px;
+}
+.control output{color:#d6b46a}
+.preset-row{display:flex;gap:8px;overflow-x:auto}
+.preset{
+ background:#303238;border:1px solid #444;
+ color:white;border-radius:8px;padding:10px;
+ white-space:nowrap;font-size:12px;
+}
+.notice{font-size:12px;color:#aaa;line-height:1.5}
+.bottom{
+ position:fixed;bottom:0;left:0;right:0;
+ background:#191b20;border-top:1px solid #383a40;
+ display:flex;justify-content:space-around;
+ padding:10px 5px calc(10px + env(safe-area-inset-bottom));
+ z-index:10;
+}
+.bottom button{
+ flex:1;background:none;border:0;color:#aaa;
+ font-size:10px;padding:5px;
+}
+.bottom button span{display:block;font-size:20px;margin-bottom:4px}
+.bottom button.active{color:#d6b46a}
+</style>
+</head>
+
+<body>
+
+<header>
+ <div class="brand">MC STUDIO
+  <small>MERFIL COLOR STUDIO</small>
+ </div>
+ <div class="status">MOBILE EDITION · V1.0</div>
+</header>
+
+<main>
+
+<div class="section-title">Espace de création</div>
+
+<div class="card">
+ <div class="viewer">
+  <div class="placeholder" id="placeholder">
+   <div class="symbol">✦</div>
+   <strong>Votre moniteur</strong>
+   <p>Importez votre première création</p>
+  </div>
+  <img id="imagePreview" alt="Aperçu de la photo">
+  <video id="videoPreview" playsinline></video>
+ </div>
+
+ <div class="toolbar">
+  <label class="btn upload" for="fileInput">＋ Importer un média</label>
+  <input type="file" id="fileInput" accept="image/*,video/*">
+  <button class="btn dark" id="beforeButton">Avant</button>
+ </div>
+
+ <div class="playbar">
+  <button id="playButton">▶</button>
+  <input type="range" id="seek" min="0" max="100" value="0">
+  <span id="timeLabel">00:00</span>
+ </div>
+</div>
+
+<div class="section-title">Studio de traitement</div>
+
+<div class="card">
+ <div class="tabs">
+  <button class="tab active" data-panel="color">◉ Couleur</button>
+  <button class="tab" data-panel="media">▧ Média</button>
+  <button class="tab" data-panel="timeline">▤ Timeline</button>
+  <button class="tab" data-panel="export">⇧ Export</button>
+ </div>
+
+ <div class="panel active" id="color">
+  <h3>Étalonnage colorimétrique</h3>
+  <p class="notice">Ajustez progressivement l'apparence de votre image.</p>
+
+  <div class="control">
+   <label>Exposition <output id="exposureValue">0</output></label>
+   <input type="range" id="exposure" min="-100" max="100" value="0">
+  </div>
+
+  <div class="control">
+   <label>Contraste <output id="contrastValue">100</output></label>
+   <input type="range" id="contrast" min="0" max="200" value="100">
+  </div>
+
+  <div class="control">
+   <label>Saturation <output id="saturationValue">100</output></label>
+   <input type="range" id="saturation" min="0" max="200" value="100">
+  </div>
+
+  <div class="control">
+   <label>Température <output id="temperatureValue">0</output></label>
+   <input type="range" id="temperature" min="-100" max="100" value="0">
+  </div>
+
+  <div class="control">
+   <label>Teinte <output id="hueValue">0</output></label>
+   <input type="range" id="hue" min="-90" max="90" value="0">
+  </div>
+
+  <h3>Présélections</h3>
+  <div class="preset-row">
+   <button class="preset" data-preset="cinema">Cinéma</button>
+   <button class="preset" data-preset="warm">Chaleureux</button>
+   <button class="preset" data-preset="cool">Froid</button>
+   <button class="preset" data-preset="reset">Naturel</button>
+  </div>
+
+  <button class="btn dark" id="resetButton" style="width:100%;margin-top:17px">
+   Réinitialiser les réglages
+  </button>
+ </div>
+
+ <div class="panel" id="media">
+  <h3>Bibliothèque de médias</h3>
+  <p class="notice">Importez une photo ou une vidéo depuis votre iPhone.</p>
+  <label class="btn upload" for="fileInput">＋ Choisir un fichier</label>
+  <p id="fileName" class="notice">Aucun média importé.</p>
+ </div>
+
+ <div class="panel" id="timeline">
+  <h3>Timeline</h3>
+  <p class="notice">Aperçu de la lecture du média importé.</p>
+  <div class="timeline-track">
+   <div class="timeline-clip"></div>
+  </div>
+  <p class="notice">La timeline multipiste et le montage seront ajoutés dans une prochaine version.</p>
+ </div>
+
+ <div class="panel" id="export">
+  <h3>Exporter votre création</h3>
+  <p class="notice">Enregistrez votre photo retouchée en JPEG.</p>
+  <button class="btn" id="exportButton" style="width:100%">
+   Télécharger la photo JPEG
+  </button>
+  <p class="notice" id="exportMessage"></p>
+  <div style="margin-top:15px">
+   <h3>Vidéo</h3>
+   <p class="notice">L'export vidéo avec audio sera intégré dans une prochaine version.</p>
+   <button class="btn dark" disabled>Export vidéo · À venir</button>
+  </div>
+ </div>
+</div>
+
+</main>
+
+<nav class="bottom">
+ <button class="active" data-panel="media"><span>▧</span>Médias</button>
+ <button data-panel="timeline"><span>▤</span>Timeline</button>
+ <button data-panel="color"><span>◉</span>Couleur</button>
+ <button data-panel="export"><span>⇧</span>Export</button>
+</nav>
+
+<script>
+const $=id=>document.getElementById(id);
+const img=$('imagePreview');
+const video=$('videoPreview');
+let mediaType='';
+let mediaURL='';
+let original=false;
+
+const sliders=['exposure','contrast','saturation','temperature','hue'];
+
+function values(){
+ return {
+  exposure:+$('exposure').value,
+  contrast:+$('contrast').value,
+  saturation:+$('saturation').value,
+  temperature:+$('temperature').value,
+  hue:+$('hue').value
+ };
+}
+
+function apply(){
+ const v=values();
+ sliders.forEach(id=>{
+  $(id+'Value').textContent=$(id).value;
+ });
+ const brightness=100+v.exposure;
+ const sepia=Math.max(0,v.temperature)/250;
+ const hue=v.hue+Math.min(0,v.temperature)*.35;
+ const filter=`brightness(${brightness}%) contrast(${v.contrast}%) saturate(${v.saturation}%) sepia(${sepia}) hue-rotate(${hue}deg)`;
+ img.style.filter=filter;
+ video.style.filter=filter;
+}
+
+sliders.forEach(id=>$(id).addEventListener('input',apply));
+
+$('fileInput').addEventListener('change',e=>{
+ const file=e.target.files[0];
+ if(!file)return;
+ if(mediaURL)URL.revokeObjectURL(mediaURL);
+ mediaURL=URL.createObjectURL(file);
+ $('placeholder').style.display='none';
+ img.style.display='none';
+ video.style.display='none';
+ $('fileName').textContent=file.name;
+ mediaType=file.type.startsWith('image/')?'image':
+ file.type.startsWith('video/')?'video':'';
+ if(mediaType==='image'){
+  img.src=mediaURL;
+  img.style.display='block';
+ }else if(mediaType==='video'){
+  video.src=mediaURL;
+  video.style.display='block';
+ }else{
+  $('placeholder').style.display='block';
+  $('placeholder').textContent='Format non pris en charge';
+ }
+ original=false;
+ apply();
+});
+
+$('beforeButton').addEventListener('click',()=>{
+ original=!original;
+ img.style.filter=original?'none':'';
+ video.style.filter=original?'none':'';
+ if(!original)apply();
+ $('beforeButton').textContent=original?'Après':'Avant';
+});
+
+$('resetButton').addEventListener('click',()=>{
+ $('exposure').value=0;
+ $('contrast').value=100;
+ $('saturation').value=100;
+ $('temperature').value=0;
+ $('hue').value=0;
+ original=false;
+ $('beforeButton').textContent='Avant';
+ apply();
+});
+
+document.querySelectorAll('[data-preset]').forEach(button=>{
+ button.addEventListener('click',()=>{
+  const p=button.dataset.preset;
+  const presets={
+   cinema:[-8,115,115,8,0],
+   warm:[5,105,115,35,0],
+   cool:[0,110,105,-30,0],
+   reset:[0,100,100,0,0]
+  };
+  sliders.forEach((id,i)=>$(id).value=presets[p][i]);
+  original=false;
+  $('beforeButton').textContent='Avant';
+  apply();
+ });
+});
+
+document.querySelectorAll('[data-panel]').forEach(button=>{
+ button.addEventListener('click',()=>{
+  const name=button.dataset.panel;
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  $(name).classList.add('active');
+  document.querySelectorAll('[data-panel]').forEach(b=>b.classList.toggle('active',b.dataset.panel===name));
+ });
+});
+
+$('playButton').addEventListener('click',()=>{
+ if(mediaType!=='video')return;
+ if(video.paused){
+  video.play();
+  $('playButton').textContent='Ⅱ';
+ }else{
+  video.pause();
+  $('playButton').textContent='▶';
+ }
+});
+
+video.addEventListener('timeupdate',()=>{
+ if(!video.duration)return;
+ $('seek').value=video.currentTime/video.duration*100;
+ $('timeLabel').textContent=formatTime(video.currentTime);
+});
+$('seek').addEventListener('input',()=>{
+ if(mediaType==='video'&&video.duration){
+  video.currentTime=$('seek').value/100*video.duration;
+ }
+});
+video.addEventListener('ended',()=>$('playButton').textContent='▶');
+
+function formatTime(s){
+ const m=Math.floor(s/60);
+ const sec=Math.floor(s%60);
+ return String(m).padStart(2,'0')+':'+String(sec).padStart(2,'0');
+}
+
+$('exportButton').addEventListener('click',()=>{
+ if(mediaType!=='image'||!img.naturalWidth){
+  $('exportMessage').textContent='Importez une photo pour utiliser cet export JPEG.';
+  return;
+ }
+ const v=values();
+ const canvas=document.createElement('canvas');
+ canvas.width=img.naturalWidth;
+ canvas.height=img.naturalHeight;
+ const ctx=canvas.getContext('2d');
+ const brightness=100+v.exposure;
+ const sepia=Math.max(0,v.temperature)/250;
+ const hue=v.hue+Math.min(0,v.temperature)*.35;
+ ctx.filter=`brightness(${brightness}%) contrast(${v.contrast}%) saturate(${v.saturation}%) sepia(${sepia}) hue-rotate(${hue}deg)`;
+ ctx.drawImage(img,0,0);
+ canvas.toBlob(blob=>{
+  if(!blob){
+   $('exportMessage').textContent='Export impossible pour ce fichier.';
+   return;
+  }
+  const link=document.createElement('a');
+  const url=URL.createObjectURL(blob);
+  link.href=url;
+  link.download='MC-Studio-creation.jpg';
+  link.click();
+  setTimeout(()=>URL.revokeObjectURL(url),1500);
+  $('exportMessage').textContent='Votre JPEG est prêt.';
+ },'image/jpeg',.94);
+});
+</script>
+</body>
+</html>
