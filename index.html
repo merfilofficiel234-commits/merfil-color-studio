@@ -209,6 +209,12 @@ select{width:100%;background:var(--raise);border:1px solid var(--grey);border-ra
      <button class="preset" id="aiPerson">✦ Personne (auto)</button>
      <button class="preset" id="aiSkin">✦ Peau (auto)</button>
     </div>
+    <div class="row">
+     <button class="preset" id="trkPerson">▶ Suivre la personne</button>
+     <button class="preset" id="trkSkin">▶ Suivre la peau</button>
+     <button class="preset" id="trkObj">▶ Suivre l’objet touché</button>
+     <button class="preset" id="trkStop">■ Arrêter le suivi</button>
+    </div>
     <p class="hint" id="aiStatus">IA : touchez un objet ou une personne sur la photo, ou appuyez sur Personne (auto).</p>
     <div id="mk_pc"></div>
     <div class="row">
@@ -473,10 +479,10 @@ function refreshMaskUI(){
  $('mkName').value=m.name;
  Object.keys(MKEY).forEach(id=>{$(id).value=m[MKEY[id]];$(id+'V').textContent=m[MKEY[id]]});
  $('mkInv').classList.toggle('on',m.inv);
- document.querySelectorAll('#mkSel .chip').forEach((c,i)=>{c.textContent=masks[i].name;c.classList.toggle('active',i===ms)});
+ document.querySelectorAll('#mkSel .chip').forEach((c,i)=>{c.textContent=(masks[i].track?'◉ ':'')+masks[i].name;c.classList.toggle('active',i===ms)});
 }
 document.querySelectorAll('#mkSel .chip').forEach(c=>c.addEventListener('click',()=>{ms=+c.dataset.k;refreshMaskUI();draw()}));
-$('mkName').addEventListener('input',e=>{masks[ms].name=e.target.value||'Masque '+(ms+1);document.querySelectorAll('#mkSel .chip')[ms].textContent=masks[ms].name});
+$('mkName').addEventListener('input',e=>{masks[ms].name=e.target.value||'Masque '+(ms+1);document.querySelectorAll('#mkSel .chip')[ms].textContent=(masks[ms].track?'◉ ':'')+masks[ms].name});
 document.querySelectorAll('[data-m]').forEach(c=>c.addEventListener('click',()=>{
  document.querySelectorAll('[data-m]').forEach(o=>o.classList.toggle('active',o===c));
  $('mk_p').style.display=c.dataset.m==='p'?'block':'none';
@@ -497,7 +503,7 @@ function initMasks(w,h){
  masks.forEach(m=>{
   m.cv=document.createElement('canvas');m.cv.width=MW;m.cv.height=MH;
   m.ctx=m.cv.getContext('2d',{willReadFrequently:true});
-  m.ex=m.te=0;m.co=m.sa=100;m.op=100;m.inv=false;
+  m.ex=m.te=0;m.co=m.sa=100;m.op=100;m.inv=false;m.track=null;
  });
  uploadMasks();refreshMaskUI();resetView();
 }
@@ -532,6 +538,7 @@ function uploadMasks(){
  };
  const paint=e=>{
   const m=masks[ms];if(!m.ctx)return;
+  if(m.track){aiSay('Ce masque est suivi par l’IA. Appuyez sur Arrêter le suivi pour peindre.');return}
   const p=pos(e),rad=Math.max(2,(+$('mk_size').value)/100*MW/2),soft=(+$('mk_soft').value)/100;
   if(!last)last=p;
   const dx=p.x-last.x,dy=p.y-last.y,n=Math.max(1,Math.ceil(Math.hypot(dx,dy)/Math.max(1,rad*.25)));
@@ -563,11 +570,15 @@ async function aiLoad(){
  aiLib=await import(MPV+'/vision_bundle.mjs');
  aiVision=await aiLib.FilesetResolver.forVisionTasks(MPV+'/wasm');
 }
-function aiInput(){ // copie réduite (1024 px max) de la photo d'origine, sans les réglages
- const w0=srcPhoto.naturalWidth,h0=srcPhoto.naturalHeight,k=Math.min(1,1024/Math.max(w0,h0));
- const c=document.createElement('canvas');c.width=Math.round(w0*k);c.height=Math.round(h0*k);
- c.getContext('2d').drawImage(srcPhoto,0,0,c.width,c.height);
- return c;
+const aiCanvas=document.createElement('canvas');
+const aiOnVideo=()=>mediaType==='video'&&!imgClip&&ready;
+function aiInput(){ // copie réduite (1024 px max) de l'image d'origine (photo ou image courante de la vidéo), sans les réglages
+ const v=aiOnVideo(),src=v?video:srcPhoto;
+ const w0=v?video.videoWidth:srcPhoto.naturalWidth,h0=v?video.videoHeight:srcPhoto.naturalHeight,k=Math.min(1,1024/Math.max(w0,h0));
+ const w=Math.round(w0*k),h=Math.round(h0*k);
+ if(aiCanvas.width!==w||aiCanvas.height!==h){aiCanvas.width=w;aiCanvas.height=h}
+ aiCanvas.getContext('2d').drawImage(src,0,0,w,h);
+ return aiCanvas;
 }
 function aiGrab(r,pick){
  if(!r)return null;
@@ -597,7 +608,8 @@ function aiApply(g){
  return Math.round(on/g.d.length*100);
 }
 async function aiRun(kind,nx,ny){
- if(!srcPhoto){aiSay('La sélection IA fonctionne pour les photos pour l’instant.');return}
+ if(!srcPhoto&&!aiOnVideo()){aiSay('Importez d’abord une photo ou une vidéo.');return}
+ if(masks[ms].track){aiSay('Ce masque est suivi par l’IA. Appuyez sur Arrêter le suivi, ou choisissez un autre masque.');return}
  if(aiBusy)return;
  aiBusy=true;
  try{
@@ -623,9 +635,10 @@ async function aiRun(kind,nx,ny){
    g=g||aiGrab(ret,n=>n>1?1:0);
   }
   if(!g)throw new Error('aucun masque reçu');
+  if(kind==='tap')lastTap={x:nx,y:ny};
   const pct=aiApply(g);
   if(kind==='skin'&&pct<1){aiSay('Aucune peau détectée sur cette photo. Essayez avec une photo où une personne est bien visible.');aiBusy=false;return}
-  aiSay((kind==='skin'?'Peau détectée : visage et corps. Complétez au pinceau si une zone manque. ':'')+'Sélection créée dans « '+masks[ms].name+' » ('+pct+' % de l’image). Si c’est l’inverse de ce que vous voulez, appuyez sur Inverser. Vous pouvez affiner au pinceau.');
+  aiSay((kind==='skin'?'Peau détectée : visage et corps. Complétez au pinceau si une zone manque. ':'')+'Sélection créée dans « '+masks[ms].name+' » ('+pct+' % de l’image). Si c’est l’inverse de ce que vous voulez, appuyez sur Inverser. Vous pouvez affiner au pinceau.'+(aiOnVideo()?' Sur une vidéo, ce masque reste fixe : pour qu’il suive, appuyez sur Suivre l’objet touché (objet) ou Suivre la personne.':''));
  }catch(e){aiSay('Erreur IA : '+((e&&e.message)||e)+'. Vérifiez votre connexion internet et réessayez.')}
  aiBusy=false;
 }
@@ -633,6 +646,114 @@ const aiTap=p=>{const x=p.x/MW,y=p.y/MH;if(x>=0&&x<=1&&y>=0&&y<=1)aiRun('tap',x,
 $('aiPerson').addEventListener('click',()=>aiRun('person'));
 $('aiSkin').addEventListener('click',()=>aiRun('skin'));
 
+
+
+/* ---------- Suivi IA d'une personne ou de la peau dans la vidéo ---------- */
+const segs={person:{},skin:{}};
+let trackBusy=false,lastTrackT=-1,trackTs=0;
+async function ensureSeg(kind,mode){
+ if(segs[kind][mode])return segs[kind][mode];
+ await aiLoad();
+ segs[kind][mode]=await aiLib.ImageSegmenter.createFromOptions(aiVision,{
+  baseOptions:{modelAssetPath:kind==='skin'?MULTI_MODEL:SELFIE_MODEL,delegate:'CPU'},
+  runningMode:mode,outputCategoryMask:false,outputConfidenceMasks:true});
+ return segs[kind][mode];
+}
+function writeMask(k,g){ // écrit le résultat de l'IA directement dans le canal du masque k
+ for(let y=0;y<MH;y++){
+  const dst=(MH-1-y)*MW,row=Math.min(g.h-1,Math.floor(y*g.h/MH))*g.w;
+  for(let x=0;x<MW;x++){
+   let a=g.d[row+Math.min(g.w-1,Math.floor(x*g.w/MW))];
+   a=a<.3?0:a>.7?1:(a-.3)/.4;
+   maskData[(dst+x)*4+k]=a*255;
+  }
+ }
+}
+function trackRun(k){
+ const kind=masks[k].track;
+ if(kind==='tap'){
+  const m=masks[k];if(!aiTapSeg||!m.pt)return false;
+  let g=null;const grab=r=>{if(!g)g=aiGrab(r,()=>0)};
+  grab(aiTapSeg.segment(aiInput(),{keypoint:{x:m.pt.x,y:m.pt.y}},r=>grab(r)));
+  if(!g)return false;
+  writeMask(k,g);
+  const c=maskCentroid(g);if(c)m.pt=c;
+  return true;
+ }
+ const sg=segs[kind]&&segs[kind][imgClip?'IMAGE':'VIDEO'];
+ if(!sg)return false;
+ let g=null;
+ const grab=r=>{if(!g)g=kind==='skin'?aiGrabSkin(r):aiGrab(r,n=>n>1?1:0)};
+ if(imgClip)grab(sg.segment(aiInput(),r=>grab(r)));
+ else{trackTs=Math.max(trackTs+1,Math.round(performance.now()));grab(sg.segmentForVideo(video,trackTs,r=>grab(r)))}
+ if(!g)return false;
+ writeMask(k,g);return true;
+}
+function trackTick(force){
+ if(trackBusy||!ready)return;
+ const idx=[];masks.forEach((m,k)=>{if(m.track)idx.push(k)});
+ if(!idx.length)return;
+ if(!imgClip){
+  if(video.readyState<2)return;
+  if(!force&&video.currentTime===lastTrackT)return;
+  lastTrackT=video.currentTime;
+ }
+ trackBusy=true;
+ try{let any=false;idx.forEach(k=>{if(trackRun(k))any=true});if(any)uploadMasks()}
+ catch(e){masks.forEach(m=>m.track=null);refreshMaskUI();aiSay('Erreur de suivi : '+((e&&e.message)||e)+'. Le suivi est arrêté.')}
+ trackBusy=false;
+}
+let lastTap=null;
+function maskCentroid(g){ // centre de la zone sélectionnée (reste à l'intérieur de la zone)
+ let sx=0,sy=0,n=0;
+ for(let y=0;y<g.h;y++)for(let x=0;x<g.w;x++)if(g.d[y*g.w+x]>.5){sx+=x;sy+=y;n++}
+ if(n<g.w*g.h*0.001)return null;
+ const cx=Math.round(sx/n),cy=Math.round(sy/n);
+ if(g.d[cy*g.w+cx]>.5)return{x:(cx+.5)/g.w,y:(cy+.5)/g.h};
+ let best=null,bd=1e18;
+ for(let y=0;y<g.h;y+=4)for(let x=0;x<g.w;x+=4)if(g.d[y*g.w+x]>.5){const d=(x-cx)*(x-cx)+(y-cy)*(y-cy);if(d<bd){bd=d;best={x:(x+.5)/g.w,y:(y+.5)/g.h}}}
+ return best;
+}
+async function startTrackObj(){
+ if(!ready){aiSay('Importez d’abord une vidéo.');return}
+ if(!lastTap){aiSay('Touchez d’abord l’objet avec Toucher (IA), puis appuyez sur Suivre l’objet touché.');return}
+ if(aiBusy)return;
+ aiBusy=true;
+ try{
+  if(!aiTapSeg){
+   aiSay('Téléchargement du modèle de sélection…');
+   await aiLoad();
+   aiTapSeg=await aiLib.InteractiveSegmenter.createFromOptions(aiVision,{baseOptions:{modelAssetPath:TAP_MODEL,delegate:'CPU'},outputCategoryMask:false,outputConfidenceMasks:true});
+  }
+  masks[ms].track='tap';masks[ms].pt={x:lastTap.x,y:lastTap.y};refreshMaskUI();
+  aiSay('Suivi de l’objet actif sur « '+masks[ms].name+' ». C’est lent : lancez la lecture ou avancez image par image. Si l’objet est perdu, touchez-le de nouveau et relancez le suivi.');
+  trackTick(true);draw();
+ }catch(e){aiSay('Erreur IA : '+((e&&e.message)||e)+'. Vérifiez votre connexion internet et réessayez.')}
+ aiBusy=false;
+}
+async function startTrack(kind){
+ if(!ready){aiSay('Importez d’abord une vidéo.');return}
+ if(aiBusy)return;
+ aiBusy=true;
+ try{
+  aiSay('Téléchargement du modèle de suivi (première fois : quelques secondes)…');
+  await ensureSeg(kind,'VIDEO');await ensureSeg(kind,'IMAGE');
+  masks[ms].track=kind;refreshMaskUI();
+  aiSay('Suivi actif sur « '+masks[ms].name+' » ('+(kind==='skin'?'peau':'personne')+'). Lancez la lecture : le masque suit à chaque image. Si le masque est inversé, appuyez sur Inverser.');
+  trackTick(true);draw();
+ }catch(e){aiSay('Erreur IA : '+((e&&e.message)||e)+'. Vérifiez votre connexion internet et réessayez.')}
+ aiBusy=false;
+}
+function stopTrack(){
+ const m=masks[ms];
+ if(!m.track){aiSay('Ce masque n’est pas suivi.');return}
+ m.track=null;syncMask(ms);uploadMasks();refreshMaskUI();draw();
+ aiSay('Suivi arrêté. Le masque revient à ce que vous aviez peint (ou vide).');
+}
+$('trkPerson').addEventListener('click',()=>startTrack('person'));
+$('trkSkin').addEventListener('click',()=>startTrack('skin'));
+$('trkObj').addEventListener('click',startTrackObj);
+$('trkStop').addEventListener('click',stopTrack);
 
 /* ---------- Zoom et déplacement de la vue (pour peindre avec précision) ---------- */
 const VW={z:1,x:0,y:0},vp=new Map();let g0=null;
@@ -815,7 +936,7 @@ function draw(){
  scheduleHisto();
 }
 function loop(){
- if(!imgClip)draw();
+ if(!imgClip){trackTick();draw()}
  if(mediaType==='video'){boundary();updateHead()}
  const live=mediaType==='video'&&(imgClip?ph.playing:(!video.paused&&!video.ended));
  if(live)raf=requestAnimationFrame(loop);
@@ -885,7 +1006,7 @@ function showPhotoClip(c,t,play){ // affiche un clip photo ; t = temps dans le c
  srcPhoto=c.img;ready=true;showCanvas();
  ph={base:Math.max(c.in,Math.min(c.out,t)),t0:performance.now(),playing:!!play};
  $('playButton').textContent=play?'Ⅱ':'▶';
- draw();updateHead();
+ trackTick(true);draw();updateHead();
  if(play){cancelAnimationFrame(raf);loop()}
 }
 function photoT(){return ph.base+(ph.playing?(performance.now()-ph.t0)/1000:0)}
@@ -978,7 +1099,7 @@ video.addEventListener('loadedmetadata',()=>{
  video.currentTime=p.t;
  if(p.play)video.play().catch(()=>{});
 });
-['loadeddata','seeked'].forEach(ev=>video.addEventListener(ev,draw));
+['loadeddata','seeked'].forEach(ev=>video.addEventListener(ev,()=>{trackTick(true);draw()}));
 video.addEventListener('error',()=>showMessage('Vidéo illisible sur ce navigateur'));
 video.addEventListener('play',()=>{$('playButton').textContent='Ⅱ';cancelAnimationFrame(raf);loop()});
 video.addEventListener('pause',()=>{if(!pending&&!(imgClip&&ph.playing))$('playButton').textContent='▶'});
