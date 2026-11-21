@@ -76,7 +76,9 @@ h3{margin:12px 0 4px;font-size:14px;font-weight:700}
 .sw.active{border-color:var(--white)}
 .cvs{display:block;width:100%;max-width:260px;aspect-ratio:1;margin:10px auto 4px;border-radius:8px;border:1px solid var(--grey);touch-action:none;background:#0c0d10}
 select{width:100%;background:var(--raise);border:1px solid var(--grey);border-radius:8px;padding:11px;font-size:14px}
-#fileInput{display:none}
+#fileInput,#fileAdd{display:none}
+.item{display:block;width:100%;text-align:left;margin:6px 0;background:var(--raise);border:1px solid var(--grey);border-radius:8px;padding:11px;font-size:13px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.item.on{border-color:var(--gold);color:var(--gold)}
 .pages{flex:none;display:flex;background:var(--panel);border-top:1px solid var(--line);padding:4px 4px calc(4px + env(safe-area-inset-bottom))}
 .pages button{flex:1;border:0;background:none;color:var(--mute);font-size:11px;padding:7px 2px;border-radius:8px}
 .pages button span{display:block;font-size:19px;margin-bottom:2px}
@@ -121,6 +123,8 @@ select{width:100%;background:var(--raise);border:1px solid var(--grey);border-ra
    <p class="hint">Importez une photo ou une vidéo depuis votre iPhone. Le traitement reste sur votre téléphone.</p>
    <label class="btn full" for="fileInput">＋ Importer un média</label>
    <input type="file" id="fileInput" accept="image/*,video/*" multiple>
+   <p class="hint" id="importInfo">Chaque nouvelle vidéo s’ajoute à la timeline. Une photo remplace le projet.</p>
+   <div id="clipList"></div>
   </div>
 
   <div class="panel" id="color">
@@ -174,7 +178,8 @@ select{width:100%;background:var(--raise);border:1px solid var(--grey);border-ra
     <button class="preset" id="edRight">Déplacer ▸</button>
     <button class="preset" id="edDel">Supprimer le clip</button>
    </div>
-   <label class="btn full" for="fileInput">＋ Ajouter une vidéo</label>
+   <label class="btn full" for="fileAdd">＋ Ajouter une vidéo</label>
+   <input type="file" id="fileAdd" accept="video/*" multiple>
    <button class="btn dark full" id="edClear">Tout retirer</button>
    <p class="hint">Les actions s’appliquent au clip sous la tête de lecture (le trait doré). Les couleurs et les masques s’appliquent à tous les clips. Le suivi automatique des masques n’existe pas encore.</p>
   </div>
@@ -868,30 +873,42 @@ function importPhoto(file){
 function addVideoClip(file){
  return new Promise(res=>{
   const url=URL.createObjectURL(file),p=document.createElement('video');
+  let done=false;
+  const end=ok=>{if(done)return;done=true;clearTimeout(tm);if(!ok)URL.revokeObjectURL(url);res(ok)};
+  const tm=setTimeout(()=>end(false),20000);
   p.preload='metadata';p.muted=true;p.playsInline=true;
   p.onloadedmetadata=()=>{
    const clip={name:file.name,url,in:0,out:p.duration,vw:p.videoWidth,vh:p.videoHeight};
    p.removeAttribute('src');p.load();
-   if(!isFinite(clip.out)||clip.out<=0){URL.revokeObjectURL(url);showMessage('Vidéo illisible');res();return}
+   if(!isFinite(clip.out)||clip.out<=0){end(false);return}
    const first=!clips.length;
    clips.push(clip);
    if(first){mediaType='video';ready=false;needMasks=true;setOriginal(false);loadClip(0,0.01,false)}
-   renderTimeline();res();
+   renderTimeline();end(true);
   };
-  p.onerror=()=>{URL.revokeObjectURL(url);showMessage('Vidéo illisible sur ce navigateur');res()};
+  p.onerror=()=>end(false);
   p.src=url;
  });
 }
-$('fileInput').addEventListener('change',async e=>{
- const files=[...e.target.files];e.target.value='';
+const isVideoFile=f=>f.type.startsWith('video/')||/\.(mp4|mov|m4v|webm)$/i.test(f.name);
+const isImageFile=f=>f.type.startsWith('image/')||/\.(jpe?g|png|webp|heic|heif|gif)$/i.test(f.name);
+async function handleFiles(list){
+ const files=[...list],say=t=>{$('importInfo').textContent=t};
  if(!files.length||!gl)return;
- if(files[0].type.startsWith('image/')){importPhoto(files[0]);return}
- const vids=files.filter(f=>f.type.startsWith('video/'));
- if(!vids.length){showMessage('Format non pris en charge');return}
+ if(isImageFile(files[0])&&!isVideoFile(files[0])){importPhoto(files[0]);say('Photo importée.');return}
+ const vids=files.filter(isVideoFile);
+ if(!vids.length){say('Format non pris en charge.');return}
  if(mediaType!=='video'){video.pause();clearClips()}
- for(const f of vids)await addVideoClip(f);
- if(curPanel==='media')goTo('color');
-});
+ const had=clips.length;let ok=0;const bad=[];
+ for(const f of vids){say('Import de '+f.name+'…');if(await addVideoClip(f))ok++;else bad.push(f.name)}
+ say(ok+' clip'+(ok>1?'s':'')+' ajouté'+(ok>1?'s':'')+'. Timeline : '+clips.length+' clip'+(clips.length>1?'s':'')+'.'+(bad.length?' Illisible sur ce navigateur : '+bad.join(', ')+'.':''));
+ if(!had&&ok&&curPanel==='media')goTo('color');
+}
+['fileInput','fileAdd'].forEach(id=>$(id).addEventListener('change',async e=>{
+ const list=[...e.target.files];
+ await handleFiles(list);
+ e.target.value='';
+}));
 function loadClip(i,t,play){
  const c=clips[i];if(!c)return;
  curClip=i;
@@ -976,7 +993,10 @@ function globalT(){
  const c=clips[curClip];if(!c)return 0;
  return clipStart(curClip)+Math.max(0,Math.min(clipLen(c),video.currentTime-c.in));
 }
-function markCurrent(){[...$('clips').children].forEach((d,i)=>d.classList.toggle('on',mediaType==='image'||i===curClip))}
+function markCurrent(){
+ [...$('clips').children].forEach((d,i)=>d.classList.toggle('on',mediaType==='image'||i===curClip));
+ [...$('clipList').children].forEach((d,i)=>d.classList.toggle('on',i===curClip));
+}
 function updateHead(){
  if(!clips.length||pending)return;
  const T=globalT();setPlayhead(T/total());$('timeLabel').textContent=fmt(T);markCurrent();
@@ -1004,6 +1024,13 @@ function renderTimeline(){
  else if(!clips.length)add('Aucun clip','1 1 0','#292c32');
  else clips.forEach((c,i)=>add(c.name,clipLen(c)+' 1 0',CLR[i%CLR.length]));
  $('fileName').textContent=mediaType==='image'?photoName:clips.length?(clips.length===1?clips[0].name:clips.length+' clips'):'Aucun média';
+ const L=$('clipList');L.innerHTML='';
+ if(mediaType==='video')clips.forEach((c,i)=>{
+  const r=document.createElement('button');r.className='item';
+  r.textContent=(i+1)+'. '+c.name+' · '+fmt(clipLen(c));
+  r.addEventListener('click',()=>{video.pause();seekGlobal(clipStart(i))});
+  L.appendChild(r);
+ });
  markCurrent();updateEditInfo();
 }
 function updateEditInfo(){
