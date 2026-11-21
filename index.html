@@ -172,7 +172,12 @@ select{width:100%;background:var(--raise);border:1px solid var(--grey);border-ra
     <div class="sub">
      <button class="chip active" id="toolBrush">Peindre</button>
      <button class="chip" id="toolErase">Gommer</button>
+     <button class="chip" id="toolTap">Toucher (IA)</button>
     </div>
+    <div class="row">
+     <button class="preset" id="aiPerson">✦ Personne (auto)</button>
+    </div>
+    <p class="hint" id="aiStatus">IA : touchez un objet ou une personne sur la photo, ou appuyez sur Personne (auto).</p>
     <div id="mk_pc"></div>
     <div class="row">
      <button class="preset on" id="mkShow">Voir le masque</button>
@@ -213,7 +218,7 @@ select{width:100%;background:var(--raise);border:1px solid var(--grey);border-ra
 <script>
 const $=id=>document.getElementById(id);
 const cv=$('view'), video=$('videoPreview');
-let mediaType='', mediaURL='', original=false, ready=false, tex=null, raf=0, curPanel='media';
+let mediaType='', mediaURL='', original=false, ready=false, tex=null, raf=0, curPanel='media', srcPhoto=null;
 const FPS=30;
 
 /* ---------- Réglages (id, nom, min, max, défaut, groupe) ---------- */
@@ -443,8 +448,10 @@ document.querySelectorAll('[data-m]').forEach(c=>c.addEventListener('click',()=>
  $('mk_p').style.display=c.dataset.m==='p'?'block':'none';
  $('mk_g').style.display=c.dataset.m==='g'?'block':'none';
 }));
-$('toolBrush').addEventListener('click',()=>{tool='brush';$('toolBrush').classList.add('active');$('toolErase').classList.remove('active')});
-$('toolErase').addEventListener('click',()=>{tool='erase';$('toolErase').classList.add('active');$('toolBrush').classList.remove('active')});
+const TOOLS={brush:'toolBrush',erase:'toolErase',tap:'toolTap'};
+Object.keys(TOOLS).forEach(t=>$(TOOLS[t]).addEventListener('click',()=>{
+ tool=t;Object.keys(TOOLS).forEach(o=>$(TOOLS[o]).classList.toggle('active',o===t));
+}));
 $('mkShow').addEventListener('click',()=>{showMaskOn=!showMaskOn;$('mkShow').classList.toggle('on',showMaskOn);draw()});
 $('mkInv').addEventListener('click',()=>{masks[ms].inv=!masks[ms].inv;$('mkInv').classList.toggle('on',masks[ms].inv);draw()});
 $('mkClear').addEventListener('click',()=>{const m=masks[ms];if(!m.ctx)return;m.ctx.clearRect(0,0,MW,MH);syncMask(ms);uploadMasks();draw()});
@@ -500,11 +507,80 @@ function uploadMasks(){
  };
  cv.addEventListener('pointerdown',e=>{
   if(curPanel!=='masks'||!ready)return;
+  if(tool==='tap'){aiTap(pos(e));return}
   painting=true;last=null;cv.setPointerCapture(e.pointerId);paint(e);
  });
  cv.addEventListener('pointermove',e=>{if(painting)paint(e)});
  ['pointerup','pointercancel'].forEach(ev=>cv.addEventListener(ev,()=>painting=false));
 })();
+
+
+/* ---------- Sélection IA (MediaPipe, calculée sur l'iPhone) ---------- */
+const MPV='https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14';
+const TAP_MODEL='https://storage.googleapis.com/mediapipe-tasks/interactive_segmenter/ptm_512_hdt_ptm_woid.tflite';
+const SELFIE_MODEL='https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_segmenter/float16/latest/selfie_segmenter.tflite';
+let aiLib=null,aiVision=null,aiTapSeg=null,aiSelfieSeg=null,aiBusy=false;
+const aiSay=t=>{$('aiStatus').textContent=t};
+async function aiLoad(){
+ if(aiLib)return;
+ aiSay('Chargement de l’IA (première fois : quelques secondes)…');
+ aiLib=await import(MPV+'/vision_bundle.mjs');
+ aiVision=await aiLib.FilesetResolver.forVisionTasks(MPV+'/wasm');
+}
+function aiInput(){ // copie réduite (1024 px max) de la photo d'origine, sans les réglages
+ const w0=srcPhoto.naturalWidth,h0=srcPhoto.naturalHeight,k=Math.min(1,1024/Math.max(w0,h0));
+ const c=document.createElement('canvas');c.width=Math.round(w0*k);c.height=Math.round(h0*k);
+ c.getContext('2d').drawImage(srcPhoto,0,0,c.width,c.height);
+ return c;
+}
+function aiGrab(r,pick){
+ if(!r)return null;
+ const ms=r.confidenceMasks;
+ if(ms&&ms.length){const m=ms[pick(ms.length)];return{d:new Float32Array(m.getAsFloat32Array()),w:m.width,h:m.height}}
+ return null;
+}
+function aiApply(g){
+ const m=masks[ms],t=document.createElement('canvas');t.width=g.w;t.height=g.h;
+ const tc=t.getContext('2d'),im=tc.createImageData(g.w,g.h),px=im.data;
+ let on=0;
+ for(let i=0;i<g.d.length;i++){
+  let a=g.d[i];a=a<.3?0:a>.7?1:(a-.3)/.4;
+  px[i*4]=px[i*4+1]=px[i*4+2]=255;px[i*4+3]=a*255;if(a>.5)on++;
+ }
+ tc.putImageData(im,0,0);
+ m.ctx.globalCompositeOperation='source-over';
+ m.ctx.clearRect(0,0,MW,MH);m.ctx.drawImage(t,0,0,MW,MH);
+ syncMask(ms);uploadMasks();draw();
+ return Math.round(on/g.d.length*100);
+}
+async function aiRun(kind,nx,ny){
+ if(!srcPhoto){aiSay('La sélection IA fonctionne pour les photos pour l’instant.');return}
+ if(aiBusy)return;
+ aiBusy=true;
+ try{
+  await aiLoad();
+  let g=null,ret;
+  if(kind==='tap'){
+   if(!aiTapSeg){aiSay('Téléchargement du modèle de sélection…');
+    aiTapSeg=await aiLib.InteractiveSegmenter.createFromOptions(aiVision,{baseOptions:{modelAssetPath:TAP_MODEL,delegate:'CPU'},outputCategoryMask:false,outputConfidenceMasks:true})}
+   aiSay('Analyse de l’image…');await new Promise(r=>setTimeout(r,40));
+   ret=aiTapSeg.segment(aiInput(),{keypoint:{x:nx,y:ny}},r=>{g=g||aiGrab(r,()=>0)});
+   g=g||aiGrab(ret,()=>0);
+  }else{
+   if(!aiSelfieSeg){aiSay('Téléchargement du modèle Personne…');
+    aiSelfieSeg=await aiLib.ImageSegmenter.createFromOptions(aiVision,{baseOptions:{modelAssetPath:SELFIE_MODEL,delegate:'CPU'},runningMode:'IMAGE',outputCategoryMask:false,outputConfidenceMasks:true})}
+   aiSay('Analyse de l’image…');await new Promise(r=>setTimeout(r,40));
+   ret=aiSelfieSeg.segment(aiInput(),r=>{g=g||aiGrab(r,n=>n>1?1:0)});
+   g=g||aiGrab(ret,n=>n>1?1:0);
+  }
+  if(!g)throw new Error('aucun masque reçu');
+  const pct=aiApply(g);
+  aiSay('Sélection créée dans « '+masks[ms].name+' » ('+pct+' % de l’image). Si c’est l’inverse de ce que vous voulez, appuyez sur Inverser. Vous pouvez affiner au pinceau.');
+ }catch(e){aiSay('Erreur IA : '+((e&&e.message)||e)+'. Vérifiez votre connexion internet et réessayez.')}
+ aiBusy=false;
+}
+const aiTap=p=>{const x=p.x/MW,y=p.y/MH;if(x>=0&&x<=1&&y>=0&&y<=1)aiRun('tap',x,y)};
+$('aiPerson').addEventListener('click',()=>aiRun('person'));
 
 /* ---------- Moteur WebGL ---------- */
 const gl=cv.getContext('webgl',{preserveDrawingBuffer:true,antialias:false});
@@ -701,7 +777,7 @@ $('fileInput').addEventListener('change',e=>{
     const c=document.createElement('canvas');w=Math.round(w*k);h=Math.round(h*k);
     c.width=w;c.height=h;c.getContext('2d').drawImage(im,0,0,w,h);src=c;
    }
-   cv.width=w;cv.height=h;initMasks(w,h);
+   cv.width=w;cv.height=h;initMasks(w,h);srcPhoto=im;
    gl.bindTexture(gl.TEXTURE_2D,tex);
    gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,src);
    ready=true;showCanvas();draw();
@@ -720,7 +796,7 @@ $('fileInput').addEventListener('change',e=>{
 video.addEventListener('loadedmetadata',()=>{
  const k=Math.min(1,1920/Math.max(video.videoWidth,video.videoHeight));
  cv.width=Math.round(video.videoWidth*k);cv.height=Math.round(video.videoHeight*k);
- initMasks(cv.width,cv.height);
+ initMasks(cv.width,cv.height);srcPhoto=null;
  ready=true;showCanvas();
  video.currentTime=0.01; // force l'affichage de la première image
 });
