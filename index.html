@@ -123,7 +123,7 @@ select{width:100%;background:var(--raise);border:1px solid var(--grey);border-ra
    <p class="hint">Importez une photo ou une vidéo depuis votre iPhone. Le traitement reste sur votre téléphone.</p>
    <label class="btn full" for="fileInput">＋ Importer un média</label>
    <input type="file" id="fileInput" accept="image/*,video/*" multiple>
-   <p class="hint" id="importInfo">Chaque nouvelle vidéo s’ajoute à la timeline. Une photo remplace le projet.</p>
+   <p class="hint" id="importInfo">Chaque photo ou vidéo ajoutée s’ajoute à la timeline, à la suite des autres.</p>
    <div id="clipList"></div>
   </div>
 
@@ -178,8 +178,12 @@ select{width:100%;background:var(--raise);border:1px solid var(--grey);border-ra
     <button class="preset" id="edRight">Déplacer ▸</button>
     <button class="preset" id="edDel">Supprimer le clip</button>
    </div>
-   <label class="btn full" for="fileAdd">＋ Ajouter une vidéo</label>
-   <input type="file" id="fileAdd" accept="video/*" multiple>
+   <div class="row">
+    <button class="preset" id="edDurM">Photo : −1 s</button>
+    <button class="preset" id="edDurP">Photo : +1 s</button>
+   </div>
+   <label class="btn full" for="fileAdd">＋ Ajouter une photo ou une vidéo</label>
+   <input type="file" id="fileAdd" accept="image/*,video/*" multiple>
    <button class="btn dark full" id="edClear">Tout retirer</button>
    <p class="hint">Les actions s’appliquent au clip sous la tête de lecture (le trait doré). Les couleurs et les masques s’appliquent à tous les clips. Le suivi automatique des masques n’existe pas encore.</p>
   </div>
@@ -772,7 +776,7 @@ function draw(){
  if(!gl||!ready)return;
  const v=original?defaults:values();
  gl.viewport(0,0,cv.width,cv.height);
- if(mediaType==='video'){
+ if(mediaType==='video'&&!imgClip){
   if(video.readyState<2)return;
   gl.bindTexture(gl.TEXTURE_2D,tex);
   gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,video);
@@ -811,9 +815,10 @@ function draw(){
  scheduleHisto();
 }
 function loop(){
- draw();
+ if(!imgClip)draw();
  if(mediaType==='video'){boundary();updateHead()}
- if(mediaType==='video'&&!video.paused&&!video.ended)raf=requestAnimationFrame(loop);
+ const live=mediaType==='video'&&(imgClip?ph.playing:(!video.paused&&!video.ended));
+ if(live)raf=requestAnimationFrame(loop);
 }
 function apply(){
  ids.forEach(id=>$(id+'Value').textContent=$(id).value);
@@ -843,11 +848,22 @@ function showMessage(t){cv.style.display='none';$('placeholder').style.display='
 function showCanvas(){$('placeholder').style.display='none';cv.style.display='block'}
 
 /* ---------- Import : une photo, ou une ou plusieurs vidéos (clips) ---------- */
-let clips=[],curClip=0,curUrl='',pending=null,needMasks=false,photoName='';
+let clips=[],curClip=0,curUrl='',pending=null,needMasks=false,photoName='',photoEl=null,imgClip=false,lastTexSrc=null,ph={base:0,t0:0,playing:false};
 const isUsed=u=>clips.some(c=>c.url===u);
-function clearClips(){[...new Set(clips.map(c=>c.url))].forEach(u=>URL.revokeObjectURL(u));clips=[];curClip=0;curUrl='';pending=null}
+function clearClips(){[...new Set(clips.map(c=>c.url))].forEach(u=>URL.revokeObjectURL(u));clips=[];curClip=0;curUrl='';pending=null;imgClip=false;lastTexSrc=null;ph={base:0,t0:0,playing:false}}
 
-function importPhoto(file){
+function photoToTexture(im){ // envoie la photo sur la carte graphique (réduite si trop grande)
+ let src=im,w=im.naturalWidth,h=im.naturalHeight;
+ const k=Math.min(1,gl.getParameter(gl.MAX_TEXTURE_SIZE)/Math.max(w,h));
+ if(k<1){
+  const c=document.createElement('canvas');w=Math.round(w*k);h=Math.round(h*k);
+  c.width=w;c.height=h;c.getContext('2d').drawImage(im,0,0,w,h);src=c;
+ }
+ cv.width=w;cv.height=h;
+ gl.bindTexture(gl.TEXTURE_2D,tex);
+ gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,src);
+}
+function importPhoto(file){ // une seule photo, sans montage : on peut la retoucher et l'exporter
  cancelAnimationFrame(raf);video.pause();clearClips();
  if(mediaURL)URL.revokeObjectURL(mediaURL);
  mediaURL=URL.createObjectURL(file);
@@ -855,20 +871,43 @@ function importPhoto(file){
  $('playButton').textContent='▶';setPlayhead(0);$('timeLabel').textContent=fmt(0);
  const im=new Image();
  im.onload=()=>{
-  let src=im,w=im.naturalWidth,h=im.naturalHeight;
-  const max=gl.getParameter(gl.MAX_TEXTURE_SIZE),k=Math.min(1,max/Math.max(w,h));
-  if(k<1){
-   const c=document.createElement('canvas');w=Math.round(w*k);h=Math.round(h*k);
-   c.width=w;c.height=h;c.getContext('2d').drawImage(im,0,0,w,h);src=c;
-  }
-  cv.width=w;cv.height=h;initMasks(w,h);srcPhoto=im;
-  gl.bindTexture(gl.TEXTURE_2D,tex);
-  gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,src);
+  photoToTexture(im);initMasks(cv.width,cv.height);srcPhoto=im;photoEl=im;lastTexSrc=null;
   ready=true;showCanvas();draw();
  };
  im.onerror=()=>showMessage('Image illisible');
  im.src=mediaURL;
  setOriginal(false);renderTimeline();goTo('color');
+}
+function showPhotoClip(c,t,play){ // affiche un clip photo ; t = temps dans le clip
+ video.pause();pending=null;imgClip=true;curUrl='';
+ if(lastTexSrc!==c){photoToTexture(c.img);lastTexSrc=c}
+ if(needMasks){initMasks(cv.width,cv.height);needMasks=false}
+ srcPhoto=c.img;ready=true;showCanvas();
+ ph={base:Math.max(c.in,Math.min(c.out,t)),t0:performance.now(),playing:!!play};
+ $('playButton').textContent=play?'Ⅱ':'▶';
+ draw();updateHead();
+ if(play){cancelAnimationFrame(raf);loop()}
+}
+function photoT(){return ph.base+(ph.playing?(performance.now()-ph.t0)/1000:0)}
+function convertPhotoToClip(){ // la photo seule devient le premier clip de la timeline
+ if(!photoEl)return;
+ clips=[{type:'image',name:photoName,url:mediaURL,img:photoEl,in:0,out:5,vw:photoEl.naturalWidth,vh:photoEl.naturalHeight}];
+ mediaURL='';curClip=0;mediaType='video';needMasks=false;lastTexSrc=null;
+ showPhotoClip(clips[0],0,false);renderTimeline();
+}
+function addPhotoClip(file){
+ return new Promise(res=>{
+  const url=URL.createObjectURL(file),im=new Image();
+  im.onload=()=>{
+   const clip={type:'image',name:file.name,url,img:im,in:0,out:5,vw:im.naturalWidth,vh:im.naturalHeight};
+   const first=!clips.length;
+   clips.push(clip);
+   if(first){mediaType='video';needMasks=true;setOriginal(false);loadClip(0,0,false)}
+   renderTimeline();res(true);
+  };
+  im.onerror=()=>{URL.revokeObjectURL(url);res(false)};
+  im.src=url;
+ });
 }
 function addVideoClip(file){
  return new Promise(res=>{
@@ -895,13 +934,21 @@ const isImageFile=f=>f.type.startsWith('image/')||/\.(jpe?g|png|webp|heic|heif|g
 async function handleFiles(list){
  const files=[...list],say=t=>{$('importInfo').textContent=t};
  if(!files.length||!gl)return;
- if(isImageFile(files[0])&&!isVideoFile(files[0])){importPhoto(files[0]);say('Photo importée.');return}
- const vids=files.filter(isVideoFile);
- if(!vids.length){say('Format non pris en charge.');return}
- if(mediaType!=='video'){video.pause();clearClips()}
+ const media=files.filter(f=>isVideoFile(f)||isImageFile(f));
+ if(!media.length){say('Format non pris en charge.');return}
+ const empty=mediaType==='';
+ if(empty&&media.length===1&&isImageFile(media[0])&&!isVideoFile(media[0])){
+  importPhoto(media[0]);say('Photo importée. Ajoutez d’autres photos ou vidéos pour faire un montage.');return;
+ }
+ if(mediaType==='image')convertPhotoToClip();
+ else if(mediaType!=='video'){video.pause();clearClips()}
  const had=clips.length;let ok=0;const bad=[];
- for(const f of vids){say('Import de '+f.name+'…');if(await addVideoClip(f))ok++;else bad.push(f.name)}
- say(ok+' clip'+(ok>1?'s':'')+' ajouté'+(ok>1?'s':'')+'. Timeline : '+clips.length+' clip'+(clips.length>1?'s':'')+'.'+(bad.length?' Illisible sur ce navigateur : '+bad.join(', ')+'.':''));
+ for(const f of media){
+  say('Import de '+f.name+'…');
+  const r=isVideoFile(f)?await addVideoClip(f):await addPhotoClip(f);
+  if(r)ok++;else bad.push(f.name);
+ }
+ say(ok+' média'+(ok>1?'s':'')+' ajouté'+(ok>1?'s':'')+'. Timeline : '+clips.length+' clip'+(clips.length>1?'s':'')+'.'+(bad.length?' Illisible sur ce navigateur : '+bad.join(', ')+'.':''));
  if(!had&&ok&&curPanel==='media')goTo('color');
 }
 ['fileInput','fileAdd'].forEach(id=>$(id).addEventListener('change',async e=>{
@@ -912,6 +959,8 @@ async function handleFiles(list){
 function loadClip(i,t,play){
  const c=clips[i];if(!c)return;
  curClip=i;
+ if(c.type==='image'){showPhotoClip(c,t,play);return}
+ imgClip=false;lastTexSrc=null;ph.playing=false;
  if(curUrl===c.url&&video.readyState>=1&&!pending){
   video.currentTime=t;
   if(play)video.play().catch(()=>{});
@@ -932,9 +981,9 @@ video.addEventListener('loadedmetadata',()=>{
 ['loadeddata','seeked'].forEach(ev=>video.addEventListener(ev,draw));
 video.addEventListener('error',()=>showMessage('Vidéo illisible sur ce navigateur'));
 video.addEventListener('play',()=>{$('playButton').textContent='Ⅱ';cancelAnimationFrame(raf);loop()});
-video.addEventListener('pause',()=>{if(!pending)$('playButton').textContent='▶'});
+video.addEventListener('pause',()=>{if(!pending&&!(imgClip&&ph.playing))$('playButton').textContent='▶'});
 video.addEventListener('ended',()=>{
- if(pending)return;
+ if(pending||imgClip)return;
  if(curClip<clips.length-1)loadClip(curClip+1,clips[curClip+1].in,true);
  else $('playButton').textContent='▶';
 });
@@ -991,7 +1040,8 @@ function clipAt(T){
 }
 function globalT(){
  const c=clips[curClip];if(!c)return 0;
- return clipStart(curClip)+Math.max(0,Math.min(clipLen(c),video.currentTime-c.in));
+ const lt=c.type==='image'?photoT():video.currentTime;
+ return clipStart(curClip)+Math.max(0,Math.min(clipLen(c),lt-c.in));
 }
 function markCurrent(){
  [...$('clips').children].forEach((d,i)=>d.classList.toggle('on',mediaType==='image'||i===curClip));
@@ -1002,7 +1052,15 @@ function updateHead(){
  const T=globalT();setPlayhead(T/total());$('timeLabel').textContent=fmt(T);markCurrent();
 }
 function boundary(){
- const c=clips[curClip];if(!c||video.paused||pending)return;
+ const c=clips[curClip];if(!c||pending)return;
+ if(c.type==='image'){
+  if(ph.playing&&photoT()>=c.out-0.01){
+   if(curClip<clips.length-1)loadClip(curClip+1,clips[curClip+1].in,true);
+   else{ph.base=c.out;ph.playing=false;$('playButton').textContent='▶'}
+  }
+  return;
+ }
+ if(video.paused)return;
  if(video.currentTime>=c.out-0.04){
   if(curClip<clips.length-1)loadClip(curClip+1,clips[curClip+1].in,true);
   else{video.pause();video.currentTime=Math.max(c.in,c.out-0.04)}
@@ -1011,7 +1069,7 @@ function boundary(){
 function seekGlobal(T){
  if(!clips.length)return;
  T=Math.max(0,Math.min(total(),T));
- const a=clipAt(T),was=!video.paused;
+ const a=clipAt(T),was=isPlaying();
  loadClip(a.i,a.t,was);
  setPlayhead(total()?T/total():0);$('timeLabel').textContent=fmt(T);
  markCurrent();
@@ -1022,13 +1080,13 @@ function renderTimeline(){
  const add=(txt,flex,col)=>{const d=document.createElement('div');d.className='clip';d.style.flex=flex;d.style.background=col;d.textContent=txt;box.appendChild(d)};
  if(mediaType==='image')add(photoName,'1 1 0',CLR[0]);
  else if(!clips.length)add('Aucun clip','1 1 0','#292c32');
- else clips.forEach((c,i)=>add(c.name,clipLen(c)+' 1 0',CLR[i%CLR.length]));
+ else clips.forEach((c,i)=>add((c.type==='image'?'▣ ':'')+c.name,clipLen(c)+' 1 0',CLR[i%CLR.length]));
  $('fileName').textContent=mediaType==='image'?photoName:clips.length?(clips.length===1?clips[0].name:clips.length+' clips'):'Aucun média';
  const L=$('clipList');L.innerHTML='';
  if(mediaType==='video')clips.forEach((c,i)=>{
   const r=document.createElement('button');r.className='item';
-  r.textContent=(i+1)+'. '+c.name+' · '+fmt(clipLen(c));
-  r.addEventListener('click',()=>{video.pause();seekGlobal(clipStart(i))});
+  r.textContent=(i+1)+'. '+(c.type==='image'?'[photo] ':'')+c.name+' · '+fmt(clipLen(c));
+  r.addEventListener('click',()=>{pauseAll();seekGlobal(clipStart(i))});
   L.appendChild(r);
  });
  markCurrent();updateEditInfo();
@@ -1037,14 +1095,21 @@ function updateEditInfo(){
  $('editInfo').textContent=!clips.length?(mediaType==='image'?'Le montage concerne les vidéos. Importez une vidéo.':'Importez une vidéo pour commencer.'):
   clips.length+' clip'+(clips.length>1?'s':'')+' · durée totale '+fmt(total());
 }
+const isPlaying=()=>imgClip?ph.playing:!video.paused;
+function pauseAll(){
+ if(imgClip){ph.base=photoT();ph.playing=false}
+ video.pause();$('playButton').textContent='▶';
+}
 $('playButton').addEventListener('click',()=>{
  if(mediaType!=='video'||!ready)return;
- if(video.paused){if(globalT()>=total()-0.05)seekGlobal(0);video.play().catch(()=>{})}
- else video.pause();
+ if(isPlaying()){pauseAll();return}
+ if(globalT()>=total()-0.05)seekGlobal(0);
+ if(imgClip){ph.t0=performance.now();ph.playing=true;$('playButton').textContent='Ⅱ';cancelAnimationFrame(raf);loop()}
+ else video.play().catch(()=>{});
 });
 function step(d){
  if(mediaType!=='video'||!clips.length)return;
- video.pause();seekGlobal(globalT()+d/FPS);
+ pauseAll();seekGlobal(globalT()+d/FPS);
 }
 $('prevFrame').addEventListener('click',()=>step(-1));
 $('nextFrame').addEventListener('click',()=>step(1));
@@ -1068,7 +1133,7 @@ function here(){
  return{i:a.i,t:a.t,T,c:clips[a.i]};
 }
 function emptyAll(){
- video.pause();clearClips();mediaType='';ready=false;
+ video.pause();clearClips();mediaType='';ready=false;photoEl=null;srcPhoto=null;
  showMessage('Moniteur vide');setPlayhead(0);$('timeLabel').textContent=fmt(0);renderTimeline();
 }
 $('edSplit').addEventListener('click',()=>{
@@ -1103,13 +1168,21 @@ $('edDel').addEventListener('click',()=>{
  curClip=Math.min(k.i,clips.length-1);
  renderTimeline();seekGlobal(clipStart(curClip));
 });
+function changeDur(d){
+ const k=here();if(!k)return;
+ if(k.c.type!=='image'){$('editInfo').textContent='Ce réglage concerne les photos. Pour une vidéo, utilisez Début ici et Fin ici.';return}
+ k.c.out=Math.max(k.c.in+1,k.c.out+d);
+ renderTimeline();seekGlobal(clipStart(k.i)+(k.t-k.c.in));
+}
+$('edDurM').addEventListener('click',()=>changeDur(-1));
+$('edDurP').addEventListener('click',()=>changeDur(1));
 $('edClear').addEventListener('click',emptyAll);
 renderTimeline();
 
 /* ---------- Export photo (même moteur que l'aperçu) ---------- */
 $('exportButton').addEventListener('click',()=>{
  const msg=$('exportMessage');
- if(mediaType!=='image'||!ready){msg.textContent='Importez une photo pour utiliser cet export.';return}
+ if(!(mediaType==='image'||(mediaType==='video'&&imgClip))||!ready){msg.textContent='Placez la tête de lecture sur une photo (ou importez une photo) pour utiliser cet export.';return}
  const type=$('format').value;
  const ext={'image/jpeg':'jpg','image/png':'png','image/webp':'webp'}[type];
  const wasOriginal=original;original=false;draw();
