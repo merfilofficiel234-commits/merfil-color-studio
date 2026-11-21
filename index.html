@@ -43,6 +43,7 @@ input[type=text]{width:100%;background:var(--raise);border:1px solid var(--grey)
 .clip.on{border-color:var(--gold)}
 .head{position:absolute;top:0;bottom:0;width:2px;background:var(--gold);left:8px;pointer-events:none}
 .head::before{content:"";position:absolute;top:0;left:-5px;border:6px solid transparent;border-top-color:var(--gold)}
+.big .panel-wrap{height:21dvh}
 .panel-wrap{flex:none;height:40dvh;max-height:340px;background:var(--panel);border-top:1px solid var(--line);overflow-y:auto;-webkit-overflow-scrolling:touch;padding:6px 14px 14px}
 .panel{display:none}.panel.active{display:block}
 .sub{display:flex;gap:6px;margin:8px 0 4px;overflow-x:auto}
@@ -102,6 +103,7 @@ select{width:100%;background:var(--raise);border:1px solid var(--grey);border-ra
   <button class="ab" id="beforeButton">Avant</button>
   <canvas id="histo" width="260" height="112"></canvas>
   <button class="ab hb" id="histoBtn">Histogramme</button>
+  <button class="ab hb" id="bigBtn" style="left:auto;right:8px">⤢ Agrandir</button>
  </div>
 
  <div class="transport">
@@ -205,6 +207,15 @@ select{width:100%;background:var(--raise);border:1px solid var(--grey);border-ra
      <button class="chip" id="toolTap">Toucher (IA)</button>
      <button class="chip" id="toolZoom">✥ Zoom</button>
     </div>
+    <div id="mk_pc"></div>
+    <div class="row">
+     <button class="preset on" id="mkShow">Voir le masque</button>
+     <button class="preset" id="mkInv">Inverser</button>
+     <button class="preset" id="mkClear">Effacer</button>
+     <button class="preset" id="mkFit">Vue 1×</button>
+    </div>
+    <p class="hint">Peignez avec le doigt sur l’image : la zone rouge est le masque. Pour être précis : curseur Zoom, ou outil ✥ Zoom (deux doigts pour agrandir, un doigt pour déplacer), puis revenez à Peindre. Le bouton « ⤢ Agrandir » du moniteur donne plus de place à l’image.</p>
+    <h3>Sélection par IA</h3>
     <div class="row">
      <button class="preset" id="aiPerson">✦ Personne (auto)</button>
      <button class="preset" id="aiSkin">✦ Peau (auto)</button>
@@ -215,17 +226,11 @@ select{width:100%;background:var(--raise);border:1px solid var(--grey);border-ra
      <button class="preset" id="trkObj">▶ Suivre l’objet touché</button>
      <button class="preset" id="trkStop">■ Arrêter le suivi</button>
     </div>
-    <p class="hint" id="aiStatus">IA : touchez un objet ou une personne sur la photo, ou appuyez sur Personne (auto).</p>
-    <div id="mk_pc"></div>
-    <div class="row">
-     <button class="preset on" id="mkShow">Voir le masque</button>
-     <button class="preset" id="mkInv">Inverser</button>
-     <button class="preset" id="mkClear">Effacer</button>
-     <button class="preset" id="mkFit">Vue 1×</button>
-    </div>
-    <p class="hint">Peignez avec le doigt directement sur l’image : la zone rouge est le masque. Pour être précis, utilisez le curseur Zoom, ou l’outil ✥ Zoom (deux doigts pour agrandir, un doigt pour déplacer), puis revenez à Peindre. Les réglages de l’onglet Réglages du masque ne touchent que cette zone.</p>
+    <p class="hint" id="aiStatus">IA : touchez un objet ou une personne sur la photo (outil Toucher), ou appuyez sur Personne (auto).</p>
    </div>
    <div id="mk_g" style="display:none">
+    <div class="row"><button class="preset" id="mkShow2">Voir la zone (léger rouge)</button></div>
+    <p class="hint">Ici, le rouge est caché pour que vous voyiez l’effet réel de vos réglages sur la zone sélectionnée. Appuyez sur « Voir la zone » si vous voulez la revoir en rouge léger.</p>
     <div class="ctl"><label>Nom du masque</label><input type="text" id="mkName" maxlength="18"></div>
     <div id="mk_gc"></div>
    </div>
@@ -464,16 +469,21 @@ $('histoBtn').addEventListener('click',()=>{
 
 
 /* ---------- Masques au pinceau (3 masques indépendants) ---------- */
-let MW=8,MH=8,maskData=new Uint8Array(256),maskTex=null,ms=0,tool='brush',showMaskOn=true;
+let maskTab='p',sliding=false,MW=8,MH=8,maskData=new Uint8Array(256),maskTex=null,ms=0,tool='brush',showMaskOn=true,showZoneG=false;
 const masks=[0,1,2].map(i=>({name:'Masque '+(i+1),ex:0,co:100,sa:100,te:0,op:100,inv:false,cv:null,ctx:null}));
 const mkRow=(id,label,min,max,val)=>`<div class="ctl"><label>${label} <output id="${id}V">${val}</output></label><input type="range" id="${id}" min="${min}" max="${max}" value="${val}"></div>`;
-$('mk_pc').innerHTML=mkRow('mk_zoom','Zoom',100,800,100)+mkRow('mk_size','Taille du pinceau',1,40,10)+mkRow('mk_soft','Douceur des bords',0,100,60);
+$('mk_pc').innerHTML=mkRow('mk_size','Taille du pinceau',1,60,14)+mkRow('mk_soft','Douceur des bords',0,100,60)+mkRow('mk_zoom','Zoom',100,800,100);
 $('mk_gc').innerHTML=mkRow('mk_op','Opacité du masque',0,100,100)+mkRow('mk_ex','Exposition',-100,100,0)+mkRow('mk_co','Contraste',0,200,100)+mkRow('mk_sa','Saturation',0,200,100)+mkRow('mk_te','Température',-100,100,0);
 ['mk_size','mk_soft'].forEach(id=>$(id).addEventListener('input',e=>$(id+'V').textContent=e.target.value));
 const MKEY={mk_op:'op',mk_ex:'ex',mk_co:'co',mk_sa:'sa',mk_te:'te'};
 Object.keys(MKEY).forEach(id=>$(id).addEventListener('input',e=>{
  masks[ms][MKEY[id]]=+e.target.value;$(id+'V').textContent=e.target.value;draw();
 }));
+Object.keys(MKEY).forEach(id=>{
+ const el=$(id);
+ el.addEventListener('pointerdown',()=>{sliding=true;draw()});
+ ['pointerup','pointercancel','change'].forEach(ev=>el.addEventListener(ev,()=>{if(sliding){sliding=false;draw()}}));
+});
 function refreshMaskUI(){
  const m=masks[ms];
  $('mkName').value=m.name;
@@ -485,6 +495,7 @@ document.querySelectorAll('#mkSel .chip').forEach(c=>c.addEventListener('click',
 $('mkName').addEventListener('input',e=>{masks[ms].name=e.target.value||'Masque '+(ms+1);document.querySelectorAll('#mkSel .chip')[ms].textContent=(masks[ms].track?'◉ ':'')+masks[ms].name});
 document.querySelectorAll('[data-m]').forEach(c=>c.addEventListener('click',()=>{
  document.querySelectorAll('[data-m]').forEach(o=>o.classList.toggle('active',o===c));
+ maskTab=c.dataset.m;draw();
  $('mk_p').style.display=c.dataset.m==='p'?'block':'none';
  $('mk_g').style.display=c.dataset.m==='g'?'block':'none';
 }));
@@ -493,6 +504,7 @@ Object.keys(TOOLS).forEach(t=>$(TOOLS[t]).addEventListener('click',()=>{
  tool=t;Object.keys(TOOLS).forEach(o=>$(TOOLS[o]).classList.toggle('active',o===t));
 }));
 $('mkShow').addEventListener('click',()=>{showMaskOn=!showMaskOn;$('mkShow').classList.toggle('on',showMaskOn);draw()});
+$('mkShow2').addEventListener('click',()=>{showZoneG=!showZoneG;$('mkShow2').classList.toggle('on',showZoneG);draw()});
 $('mkInv').addEventListener('click',()=>{masks[ms].inv=!masks[ms].inv;$('mkInv').classList.toggle('on',masks[ms].inv);draw()});
 $('mkClear').addEventListener('click',()=>{const m=masks[ms];if(!m.ctx)return;m.ctx.clearRect(0,0,MW,MH);syncMask(ms);uploadMasks();draw()});
 
@@ -564,6 +576,7 @@ const MULTI_MODEL='https://storage.googleapis.com/mediapipe-models/image_segment
 const SELFIE_MODEL='https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_segmenter/float16/latest/selfie_segmenter.tflite';
 let aiLib=null,aiVision=null,aiTapSeg=null,aiSelfieSeg=null,aiMultiSeg=null,aiBusy=false;
 const aiSay=t=>{$('aiStatus').textContent=t};
+const errText=e=>(e&&((e.name&&e.name!=='Error'?e.name+' : ':'')+(e.message||'')))||String(e);
 async function aiLoad(){
  if(aiLib)return;
  aiSay('Chargement de l’IA (première fois : quelques secondes)…');
@@ -639,7 +652,7 @@ async function aiRun(kind,nx,ny){
   const pct=aiApply(g);
   if(kind==='skin'&&pct<1){aiSay('Aucune peau détectée sur cette photo. Essayez avec une photo où une personne est bien visible.');aiBusy=false;return}
   aiSay((kind==='skin'?'Peau détectée : visage et corps. Complétez au pinceau si une zone manque. ':'')+'Sélection créée dans « '+masks[ms].name+' » ('+pct+' % de l’image). Si c’est l’inverse de ce que vous voulez, appuyez sur Inverser. Vous pouvez affiner au pinceau.'+(aiOnVideo()?' Sur une vidéo, ce masque reste fixe : pour qu’il suive, appuyez sur Suivre l’objet touché (objet) ou Suivre la personne.':''));
- }catch(e){aiSay('Erreur IA : '+((e&&e.message)||e)+'. Vérifiez votre connexion internet et réessayez.')}
+ }catch(e){aiSay('Erreur IA : '+errText(e)+'. Vérifiez votre connexion internet et réessayez.')}
  aiBusy=false;
 }
 const aiTap=p=>{const x=p.x/MW,y=p.y/MH;if(x>=0&&x<=1&&y>=0&&y<=1)aiRun('tap',x,y)};
@@ -650,7 +663,7 @@ $('aiSkin').addEventListener('click',()=>aiRun('skin'));
 
 /* ---------- Suivi IA d'une personne ou de la peau dans la vidéo ---------- */
 const segs={person:{},skin:{}};
-let trackBusy=false,lastTrackT=-1,trackTs=0;
+let trackBusy=false,lastTrackT=-1,trackTs=0,trackN=0;
 async function ensureSeg(kind,mode){
  if(segs[kind][mode])return segs[kind][mode];
  await aiLoad();
@@ -659,16 +672,20 @@ async function ensureSeg(kind,mode){
   runningMode:mode,outputCategoryMask:false,outputConfidenceMasks:true});
  return segs[kind][mode];
 }
-function writeMask(k,g){ // écrit le résultat de l'IA directement dans le canal du masque k
+function writeMask(k,g){ // écrit le résultat de l'IA directement dans le canal du masque k ; renvoie la part de l'image couverte (%)
+ let on=0;
  for(let y=0;y<MH;y++){
   const dst=(MH-1-y)*MW,row=Math.min(g.h-1,Math.floor(y*g.h/MH))*g.w;
   for(let x=0;x<MW;x++){
    let a=g.d[row+Math.min(g.w-1,Math.floor(x*g.w/MW))];
    a=a<.3?0:a>.7?1:(a-.3)/.4;
+   if(a>.5)on++;
    maskData[(dst+x)*4+k]=a*255;
   }
  }
+ return Math.round(on/(MW*MH)*100);
 }
+const onPhoto=()=>mediaType==='image'||imgClip;
 function trackRun(k){
  const kind=masks[k].track;
  if(kind==='tap'){
@@ -676,31 +693,35 @@ function trackRun(k){
   let g=null;const grab=r=>{if(!g)g=aiGrab(r,()=>0)};
   grab(aiTapSeg.segment(aiInput(),{keypoint:{x:m.pt.x,y:m.pt.y}},r=>grab(r)));
   if(!g)return false;
-  writeMask(k,g);
+  m.cov=writeMask(k,g);
   const c=maskCentroid(g);if(c)m.pt=c;
   return true;
  }
- const sg=segs[kind]&&segs[kind][imgClip?'IMAGE':'VIDEO'];
+ const sg=segs[kind]&&segs[kind][onPhoto()?'IMAGE':'VIDEO'];
  if(!sg)return false;
  let g=null;
  const grab=r=>{if(!g)g=kind==='skin'?aiGrabSkin(r):aiGrab(r,n=>n>1?1:0)};
- if(imgClip)grab(sg.segment(aiInput(),r=>grab(r)));
+ if(onPhoto())grab(sg.segment(aiInput(),r=>grab(r)));
  else{trackTs=Math.max(trackTs+1,Math.round(performance.now()));grab(sg.segmentForVideo(video,trackTs,r=>grab(r)))}
  if(!g)return false;
- writeMask(k,g);return true;
+ masks[k].cov=writeMask(k,g);return true;
 }
 function trackTick(force){
  if(trackBusy||!ready)return;
  const idx=[];masks.forEach((m,k)=>{if(m.track)idx.push(k)});
  if(!idx.length)return;
- if(!imgClip){
+ if(!onPhoto()){
   if(video.readyState<2)return;
   if(!force&&video.currentTime===lastTrackT)return;
   lastTrackT=video.currentTime;
  }
  trackBusy=true;
- try{let any=false;idx.forEach(k=>{if(trackRun(k))any=true});if(any)uploadMasks()}
- catch(e){masks.forEach(m=>m.track=null);refreshMaskUI();aiSay('Erreur de suivi : '+((e&&e.message)||e)+'. Le suivi est arrêté.')}
+ try{
+  const t0=performance.now();let any=false;
+  idx.forEach(k=>{if(trackRun(k))any=true});
+  if(any){uploadMasks();trackN++;aiSay('Suivi actif : '+trackN+' images analysées · '+Math.round(performance.now()-t0)+' ms par image · zone suivie : '+(masks[idx[0]].cov||0)+' % de l’image.')}
+ }
+ catch(e){masks.forEach(m=>m.track=null);refreshMaskUI();aiSay('Erreur de suivi : '+errText(e)+'. Le suivi est arrêté.')}
  trackBusy=false;
 }
 let lastTap=null;
@@ -725,10 +746,10 @@ async function startTrackObj(){
    await aiLoad();
    aiTapSeg=await aiLib.InteractiveSegmenter.createFromOptions(aiVision,{baseOptions:{modelAssetPath:TAP_MODEL,delegate:'CPU'},outputCategoryMask:false,outputConfidenceMasks:true});
   }
-  masks[ms].track='tap';masks[ms].pt={x:lastTap.x,y:lastTap.y};refreshMaskUI();
+  trackN=0;masks[ms].track='tap';masks[ms].pt={x:lastTap.x,y:lastTap.y};refreshMaskUI();
   aiSay('Suivi de l’objet actif sur « '+masks[ms].name+' ». C’est lent : lancez la lecture ou avancez image par image. Si l’objet est perdu, touchez-le de nouveau et relancez le suivi.');
   trackTick(true);draw();
- }catch(e){aiSay('Erreur IA : '+((e&&e.message)||e)+'. Vérifiez votre connexion internet et réessayez.')}
+ }catch(e){aiSay('Erreur IA : '+errText(e)+'. Vérifiez votre connexion internet et réessayez.')}
  aiBusy=false;
 }
 async function startTrack(kind){
@@ -738,10 +759,10 @@ async function startTrack(kind){
  try{
   aiSay('Téléchargement du modèle de suivi (première fois : quelques secondes)…');
   await ensureSeg(kind,'VIDEO');await ensureSeg(kind,'IMAGE');
-  masks[ms].track=kind;refreshMaskUI();
+  trackN=0;masks[ms].track=kind;refreshMaskUI();
   aiSay('Suivi actif sur « '+masks[ms].name+' » ('+(kind==='skin'?'peau':'personne')+'). Lancez la lecture : le masque suit à chaque image. Si le masque est inversé, appuyez sur Inverser.');
   trackTick(true);draw();
- }catch(e){aiSay('Erreur IA : '+((e&&e.message)||e)+'. Vérifiez votre connexion internet et réessayez.')}
+ }catch(e){aiSay('Erreur IA : '+errText(e)+'. Vérifiez votre connexion internet et réessayez.')}
  aiBusy=false;
 }
 function stopTrack(){
@@ -799,7 +820,7 @@ const FS=`precision highp float;varying vec2 v;uniform sampler2D t;uniform vec2 
 uniform float ex,co,sa,vi,te,ti,sh,hi,vg,sp;
 uniform vec3 li,ga,gn;
 uniform vec4 hs[8];uniform float uh;uniform sampler2D cu;uniform float uc;
-uniform vec4 mp[3];uniform vec2 mo[3];uniform sampler2D mk;uniform float um,us;
+uniform vec4 mp[3];uniform vec2 mo[3];uniform sampler2D mk;uniform float um,us,uo;
 vec3 rgb2hsv(vec3 c){vec4 K=vec4(0.,-1./3.,2./3.,-1.);vec4 p=mix(vec4(c.bg,K.wz),vec4(c.gb,K.xy),step(c.b,c.g));vec4 q=mix(vec4(p.xyw,c.r),vec4(c.r,p.yzx),step(p.x,c.r));float d=q.x-q.y;float e=1.0e-6;return vec3(abs(q.z+(q.w-q.y)/(6.*d+e)),d/(q.x+e),q.x);}
 vec3 hsv2rgb(vec3 c){vec4 K=vec4(1.,2./3.,1./3.,3.);vec3 p=abs(fract(c.xxx+K.xyz)*6.-K.www);return c.z*mix(K.xxx,clamp(p-K.xxx,0.,1.),c.y);}
 void main(){
@@ -859,7 +880,7 @@ void main(){
   }
  }
  c*=1.-vg*smoothstep(.25,.75,length(v-.5));
- c=mix(c,vec3(.95,.2,.15),sw*.55);
+ c=mix(c,vec3(.95,.2,.15),sw*uo);
  gl_FragColor=vec4(clamp(c,0.,1.),1.);
 }`;
 const U={};
@@ -872,7 +893,7 @@ if(gl){
  const buf=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,buf);
  gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,1,1]),gl.STATIC_DRAW);
  const loc=gl.getAttribLocation(prog,'p');gl.enableVertexAttribArray(loc);gl.vertexAttribPointer(loc,2,gl.FLOAT,false,0,0);
- ['t','px','ex','co','sa','vi','te','ti','sh','hi','vg','sp','li','ga','gn','hs','uh','cu','uc','mp','mo','mk','um','us'].forEach(n=>U[n]=gl.getUniformLocation(prog,n));
+ ['t','px','ex','co','sa','vi','te','ti','sh','hi','vg','sp','li','ga','gn','hs','uh','cu','uc','mp','mo','mk','um','us','uo'].forEach(n=>U[n]=gl.getUniformLocation(prog,n));
  tex=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,tex);
  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true);
  [[gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE],[gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE],[gl.TEXTURE_MIN_FILTER,gl.LINEAR],[gl.TEXTURE_MAG_FILTER,gl.LINEAR]]
@@ -928,7 +949,8 @@ function draw(){
   masks.forEach((m,i)=>{A.set([m.ex/50,m.co/100,m.sa/100,m.te/100],i*4);O.set([m.op/100,m.inv?1:0],i*2);if(m.ex||m.te||m.co!==100||m.sa!==100)on=1});
   gl.uniform4fv(U.mp,A);gl.uniform2fv(U.mo,O);gl.uniform1i(U.mk,2);
   gl.uniform1f(U.um,original?0:on);
-  gl.uniform1f(U.us,(!original&&curPanel==='masks'&&showMaskOn)?ms+1:0);
+  gl.uniform1f(U.us,(!original&&curPanel==='masks'&&(maskTab==='g'?showZoneG:showMaskOn))?ms+1:0);
+  gl.uniform1f(U.uo,sliding?0:(maskTab==='g'?.22:.55));
  }
  gl.uniform1i(U.cu,1);gl.uniform1f(U.uc,original?0:(curvesOn?1:0));
  gl.uniform3f(U.gn,1+tn[0]*.6+ln*.5,1+tn[1]*.6+ln*.5,1+tn[2]*.6+ln*.5);
@@ -1317,6 +1339,11 @@ $('exportButton').addEventListener('click',()=>{
  },type,.94);
 });
 
+$('bigBtn').addEventListener('click',()=>{
+ const a=$('app');a.classList.toggle('big');
+ $('bigBtn').textContent=a.classList.contains('big')?'⤡ Réduire':'⤢ Agrandir';
+ if(typeof applyView==='function')applyView();
+});
 refreshMaskUI();
 apply();
 </script>
