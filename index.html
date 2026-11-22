@@ -54,6 +54,39 @@ input[type=text]{width:100%;background:var(--raise);border:1px solid var(--grey)
 .bar{height:12px;background:var(--grey);border-radius:6px;overflow:hidden;margin:12px 0 4px}
 .bar>div{height:100%;width:0;background:var(--gold)}
 a.btn{display:block;text-decoration:none}
+.hb2{width:38px;height:34px;border:0;border-radius:9px;background:var(--raise);color:var(--white);padding:0;margin-right:10px;flex:none;display:flex;align-items:center;justify-content:center}
+.hb2:active{background:var(--grey)}
+.hb2 svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.tl{display:flex;align-items:center;min-width:0}
+#home{position:fixed;inset:0;z-index:60;overflow-y:auto;-webkit-overflow-scrolling:touch;background:radial-gradient(120% 60% at 50% 0,#1b1d22 0,var(--bg) 60%);padding:calc(env(safe-area-inset-top) + 22px) 16px calc(env(safe-area-inset-bottom) + 28px)}
+.hwrap{max-width:560px;margin:0 auto}
+.hlogo{text-align:center;font-weight:800;font-size:30px;letter-spacing:.14em;color:var(--gold);line-height:1.1}
+.hsub{text-align:center;font-size:10px;letter-spacing:.32em;color:var(--mute);margin-top:6px}
+.htag{text-align:center;font-size:11px;letter-spacing:.38em;color:var(--white);opacity:.7;margin:10px 0 26px}
+.hnew{display:flex;align-items:center;gap:14px;width:100%;border:0;border-radius:18px;padding:18px;background:linear-gradient(120deg,#e2c27a,#b8944a);color:#151515;font-weight:800;font-size:18px;text-align:left}
+.hnew .plus{width:46px;height:46px;border-radius:50%;background:#151515;color:var(--gold);display:flex;align-items:center;justify-content:center;font-size:28px;flex:none;line-height:1}
+.hnew small{display:block;font-weight:600;font-size:12px;opacity:.75;margin-top:3px}
+.hcont{display:flex;align-items:center;gap:12px;width:100%;margin-top:12px;border:1px solid var(--gold);border-radius:14px;padding:13px 16px;background:var(--panel);color:var(--white);font-weight:700;font-size:14px;text-align:left}
+.hcont span{color:var(--gold);font-size:18px}
+.hcont small{display:block;font-weight:500;font-size:11px;color:var(--mute);margin-top:2px}
+.htabs{display:flex;gap:8px;margin:26px 0 12px}
+.htab{flex:1;border:1px solid var(--grey);background:var(--raise);color:var(--mute);border-radius:10px;padding:10px 4px;font-size:12px}
+.htab.on{background:var(--gold);color:#151515;border-color:var(--gold);font-weight:700}
+.hgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.hcard{background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.hcard .th{position:relative;display:block;width:100%;aspect-ratio:4/3;background:#000;border:0;padding:0}
+.hcard .th img{width:100%;height:100%;object-fit:cover;display:block}
+.hcard .th .noimg{display:flex;align-items:center;justify-content:center;width:100%;height:100%;color:var(--gold);font-size:26px}
+.bdg{position:absolute;top:7px;left:7px;font-size:10px;font-weight:700;padding:3px 8px;border-radius:6px;background:rgba(16,17,20,.88);color:var(--mute)}
+.bdg.done{background:var(--gold);color:#151515}
+.hcard .hm{padding:9px 11px 8px;text-align:left}
+.hcard b{display:block;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hcard small{display:block;color:var(--mute);font-size:11px;margin-top:2px}
+.hact{display:flex;border-top:1px solid var(--line)}
+.hact button{flex:1;background:none;border:0;color:var(--mute);padding:10px 0;font-size:12px}
+.hact button+button{border-left:1px solid var(--line)}
+.hempty{grid-column:1/-1;text-align:center;color:var(--mute);padding:30px 14px;font-size:13px;line-height:1.55;border:1px dashed var(--grey);border-radius:14px}
+.hfoot{margin:22px 0 0;font-size:11px;line-height:1.55;color:var(--mute)}
 .prow{display:flex;align-items:center;gap:8px;margin:8px 0;padding:8px;background:var(--raise);border:1px solid var(--grey);border-radius:10px}
 .prow.cur{border-color:var(--gold)}
 .pth{width:56px;height:42px;object-fit:cover;border-radius:6px;background:#000;flex:none}
@@ -106,10 +139,26 @@ select{width:100%;background:var(--raise);border:1px solid var(--grey);border-ra
 </style>
 </head>
 <body>
-<div id="app">
+<div id="home">
+ <div class="hwrap">
+  <div class="hlogo">MC STUDIO</div>
+  <div class="hsub">MERFIL COLOR STUDIO</div>
+  <div class="htag">COLOR • CREATE • MASTER</div>
+  <button class="hnew" id="homeNew"><span class="plus">＋</span><span>Nouveau projet<small>Entrer dans l’espace de travail</small></span></button>
+  <div id="homeCont"></div>
+  <div class="htabs">
+   <button class="htab on" data-f="all">Tous</button>
+   <button class="htab" data-f="draft">Brouillons</button>
+   <button class="htab" data-f="done">Exportés</button>
+  </div>
+  <div class="hgrid" id="homeGrid"></div>
+  <p class="hfoot" id="homeSpace"></p>
+ </div>
+</div>
+<div id="app" style="display:none">
 
  <div class="top">
-  <div class="brand">MC STUDIO<small>MERFIL COLOR STUDIO</small></div>
+  <div class="tl"><button class="hb2" id="homeBtn" aria-label="Accueil"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h5v-6h4v6h5V10"/></svg></button><div class="brand">MC STUDIO<small>MERFIL COLOR STUDIO</small></div></div>
   <div class="uredo"><button id="undoBtn" aria-label="Annuler" disabled>↶</button><button id="redoBtn" aria-label="Rétablir" disabled>↷</button></div>
   <div class="fname" id="fileName">Aucun média</div>
  </div>
@@ -150,9 +199,7 @@ select{width:100%;background:var(--raise);border:1px solid var(--grey);border-ra
    <h3>Projet</h3>
    <div class="ctl"><input type="text" id="prjName" maxlength="30" placeholder="Nom du projet"></div>
    <p class="hint" id="prjInfo">Aucun projet ouvert. Dès que vous importez un média, un projet est créé et enregistré automatiquement sur cet iPhone.</p>
-   <button class="btn dark full" id="prjNew">＋ Nouveau projet</button>
-   <div id="prjBox"></div>
-   <p class="hint" id="prjSpace"></p>
+   <button class="btn dark full" id="prjHome">⌂ Retour à l’accueil (tous mes projets)</button>
   </div>
 
   <div class="panel" id="color">
@@ -303,7 +350,7 @@ const $=id=>document.getElementById(id);
 const cv=$('view'), video=$('videoPreview');
 let mediaType='', mediaURL='', original=false, ready=false, tex=null, raf=0, curPanel='media', srcPhoto=null, exporting=false,
  photoFile=null, photoKey='', curProjectId=null, projCreated=0, saving=false, saveT=0, loading=false,
- mkDirty=true, mkCache=null, pendingRestore=null, persisted=new Set(), sizes={};
+ mkDirty=true, mkCache=null, pendingRestore=null, persisted=new Set(), sizes={}, projExported=0, homeFilter='all', homeData=[];
 const FPS=30;
 
 /* ---------- Réglages (id, nom, min, max, défaut, groupe) ---------- */
@@ -1577,7 +1624,7 @@ async function saveNow(){
    mode:mediaType==='image'?'image':(clips.length?'video':'empty'),
    photoKey:mediaType==='image'?photoKey:'',photoName:photoName,
    clips:clips.map(c=>({type:c.type||'video',name:c.name,key:c.key,in:c.in,out:c.out,vw:c.vw,vh:c.vh})),
-   snap:snapshot(),mk:mkCache,dims:[MW,MH],thumb,sizes:Object.fromEntries(keys.map(k=>[k,sizes[k]||0])),
+   exportedAt:projExported||0,snap:snapshot(),mk:mkCache,dims:[MW,MH],thumb,sizes:Object.fromEntries(keys.map(k=>[k,sizes[k]||0])),
    size:keys.reduce((a,k)=>a+(sizes[k]||0),0)
   };
   await dbPut('projects',rec);
@@ -1589,32 +1636,106 @@ async function saveNow(){
  saving=false;
 }
 async function prjRefresh(){
- const box=$('prjBox');
  try{
-  const all=(await dbAll('projects')).sort((a,b)=>b.updated-a.updated);
-  box.innerHTML='';
-  all.forEach(r=>{
-   const row=document.createElement('div');row.className='prow'+(r.id===curProjectId?' cur':'');
-   const im=document.createElement('img');im.className='pth';im.alt='';if(r.thumb)im.src=r.thumb;
-   const meta=document.createElement('div');meta.className='pmeta';
-   const b=document.createElement('b');b.textContent=r.name;
-   const sm=document.createElement('small');
-   sm.textContent=new Date(r.updated).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'})+' '+hhmm(r.updated)+' · '+mo(r.size||0)+(r.id===curProjectId?' · ouvert':'');
-   meta.appendChild(b);meta.appendChild(sm);
-   const o=document.createElement('button');o.className='preset';o.textContent='Ouvrir';o.addEventListener('click',()=>prjOpen(r.id));
-   const d=document.createElement('button');d.className='preset';d.textContent='✕';d.setAttribute('aria-label','Supprimer '+r.name);d.addEventListener('click',()=>prjDelete(r.id,r.name));
-   row.append(im,meta,o,d);box.appendChild(row);
-  });
-  if(!all.length&&!curProjectId)pmsg('Aucun projet ouvert. Dès que vous importez un média, un projet est créé et enregistré automatiquement sur cet iPhone.');
-  else if(all.length&&!curProjectId&&mediaType==='')pmsg('Votre travail précédent est dans la liste : appuyez sur Ouvrir pour le reprendre.');
- }catch(e){box.textContent='';pmsg('Les projets ne sont pas disponibles ici : '+((e&&e.message)||e))}
+  homeData=(await dbAll('projects')).sort((x,y)=>y.updated-x.updated);
+  renderHome();
+ }catch(e){
+  $('homeGrid').innerHTML='';
+  const d=document.createElement('div');d.className='hempty';d.textContent='Les projets ne sont pas disponibles ici : '+((e&&e.message)||e);
+  $('homeGrid').appendChild(d);
+ }
  try{
   if(navigator.storage&&navigator.storage.estimate){
    const q=await navigator.storage.estimate();
-   $('prjSpace').textContent='Espace utilisé par MC Studio : '+mo(q.usage||0)+(q.quota?' sur environ '+(q.quota/1073741824).toFixed(1)+' Go disponibles':'')+'. Safari peut effacer les données d’un site non utilisé pendant plusieurs jours : ajoutez MC Studio à l’écran d’accueil (Partager, puis Sur l’écran d’accueil) pour mieux les garder.';
+   $('homeSpace').textContent='Espace utilisé par MC Studio : '+mo(q.usage||0)+(q.quota?' sur environ '+(q.quota/1073741824).toFixed(1)+' Go disponibles':'')+'. Vos projets sont gardés sur cet iPhone. Safari peut effacer les données d’un site non utilisé pendant plusieurs jours : ajoutez MC Studio à l’écran d’accueil (Partager, puis Sur l’écran d’accueil) pour mieux les garder.';
   }
  }catch(e){}
 }
+function renderHome(){
+ const all=homeData,nDone=all.filter(r=>r.exportedAt).length,nDraft=all.length-nDone;
+ document.querySelectorAll('.htab').forEach(t=>{
+  const f=t.dataset.f,n=f==='all'?all.length:f==='draft'?nDraft:nDone;
+  t.textContent=(f==='all'?'Tous':f==='draft'?'Brouillons':'Exportés')+' ('+n+')';
+  t.classList.toggle('on',f===homeFilter);
+ });
+ // bouton pour continuer / reprendre
+ const hc=$('homeCont');hc.innerHTML='';
+ const open=curProjectId&&mediaType!=='',last=all[0];
+ if(open||last){
+  const b=document.createElement('button');b.className='hcont';
+  const ic=document.createElement('span');ic.textContent='▶';
+  const tx=document.createElement('div');
+  const nm=open?($('prjName').value||'Projet en cours'):last.name;
+  tx.textContent=(open?'Continuer : ':'Reprendre le dernier projet : ')+nm;
+  const sm=document.createElement('small');sm.textContent=open?'Retour à l’espace de travail':'Ouvre « '+last.name+' »';
+  tx.appendChild(sm);b.append(ic,tx);
+  b.addEventListener('click',()=>{if(open)enterWork();else homeOpen(last.id)});
+  hc.appendChild(b);
+ }
+ // cartes
+ const list=all.filter(r=>homeFilter==='all'||(homeFilter==='done'?!!r.exportedAt:!r.exportedAt));
+ const g=$('homeGrid');g.innerHTML='';
+ if(!list.length){
+  const d=document.createElement('div');d.className='hempty';
+  d.textContent=!all.length?'Aucun projet pour l’instant. Appuyez sur « Nouveau projet » pour entrer dans l’espace de travail : votre travail sera enregistré automatiquement ici.'
+   :homeFilter==='done'?'Aucun projet exporté pour l’instant. Un projet apparaît ici après un export vidéo.':'Aucun brouillon : tous vos projets ont été exportés.';
+  g.appendChild(d);return;
+ }
+ list.forEach(r=>{
+  const card=document.createElement('div');card.className='hcard';
+  const th=document.createElement('button');th.className='th';th.setAttribute('aria-label','Ouvrir '+r.name);
+  if(r.thumb){const im=document.createElement('img');im.alt='';im.src=r.thumb;th.appendChild(im)}
+  else{const n=document.createElement('div');n.className='noimg';n.textContent='✦';th.appendChild(n)}
+  const bd=document.createElement('span');bd.className='bdg'+(r.exportedAt?' done':'');bd.textContent=r.exportedAt?'Exporté':'Brouillon';th.appendChild(bd);
+  th.addEventListener('click',()=>homeOpen(r.id));
+  const m=document.createElement('div');m.className='hm';
+  const b=document.createElement('b');b.textContent=r.name;
+  const sm=document.createElement('small');
+  sm.textContent=new Date(r.updated).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'})+' '+hhmm(r.updated)+' · '+mo(r.size||0)+(r.id===curProjectId?' · ouvert':'');
+  m.append(b,sm);
+  const act=document.createElement('div');act.className='hact';
+  const rn=document.createElement('button');rn.textContent='Renommer';rn.addEventListener('click',()=>homeRename(r.id,r.name));
+  const dl=document.createElement('button');dl.textContent='Supprimer';dl.addEventListener('click',()=>prjDelete(r.id,r.name));
+  act.append(rn,dl);
+  card.append(th,m,act);g.appendChild(card);
+ });
+}
+async function homeRename(id,name){
+ const n=(prompt('Nouveau nom du projet',name)||'').trim();
+ if(!n||n===name)return;
+ try{
+  const rec=await dbGet('projects',id);if(!rec)return;
+  rec.name=n.slice(0,30);await dbPut('projects',rec);
+  if(id===curProjectId)$('prjName').value=rec.name;
+ }catch(e){pmsg('Renommage impossible : '+((e&&e.message)||e))}
+ prjRefresh();
+}
+function enterWork(){
+ $('home').style.display='none';$('app').style.display='';
+ requestAnimationFrame(()=>{
+  window.dispatchEvent(new Event('resize'));
+  if(typeof applyView==='function')applyView();
+  draw();
+ });
+}
+async function showHome(){
+ if(exporting){$('vexMsg').textContent='Attendez la fin de l’export avant de revenir à l’accueil.';return}
+ pauseAll();
+ await flushSave();
+ $('app').style.display='none';$('home').style.display='block';$('home').scrollTop=0;
+ await prjRefresh();
+}
+async function homeOpen(id){
+ await prjOpen(id);
+ enterWork();
+}
+$('homeBtn').addEventListener('click',showHome);
+$('prjHome').addEventListener('click',showHome);
+$('homeNew').addEventListener('click',async()=>{
+ await prjNew();
+ enterWork();goTo('media');
+});
+document.querySelectorAll('.htab').forEach(t=>t.addEventListener('click',()=>{homeFilter=t.dataset.f;renderHome()}));
 function resetLook(){
  ids.forEach(id=>$(id).value=defaults[id]);
  resetWheels();resetHSL();resetCurves();
@@ -1653,7 +1774,7 @@ async function prjOpen(id){
   if(!rec){pmsg('Projet introuvable.');return}
   loading=true;
   stopAll();resetLook();
-  curProjectId=id;projCreated=rec.created;$('prjName').value=rec.name;
+  curProjectId=id;projCreated=rec.created;projExported=rec.exportedAt||0;$('prjName').value=rec.name;
   persisted=new Set(Object.keys(rec.sizes||{}));sizes=Object.assign({},rec.sizes||{});
   pendingRestore=rec;
   if(rec.mode==='image'){
@@ -1678,7 +1799,7 @@ async function prjOpen(id){
    pendingRestore=null;loading=false;applySnap(rec.snap,true);resetHistory();
    pmsg('Projet « '+rec.name+' » ouvert (timeline vide). Ajoutez des médias.');prjRefresh();
   }
-  goTo('media');
+  goTo(rec.mode==='empty'?'media':'color');
  }catch(e){
   loading=false;pendingRestore=null;
   pmsg('Impossible d’ouvrir le projet : '+((e&&e.message)||e));
@@ -1689,7 +1810,7 @@ async function prjNew(){
  await flushSave();
  loading=true;
  stopAll();resetLook();resetHistory();
- curProjectId=null;persisted=new Set();sizes={};mkCache=null;mkDirty=true;
+ curProjectId=null;projExported=0;persisted=new Set();sizes={};mkCache=null;mkDirty=true;
  $('prjName').value='';renderTimeline();
  loading=false;
  pmsg('Nouveau projet vide. Importez un média pour commencer : il sera enregistré automatiquement.');
@@ -1699,12 +1820,11 @@ async function prjDelete(id,name){
  if(!confirm('Supprimer le projet « '+name+' » et ses médias enregistrés ?'))return;
  try{
   await dbDelProject(id);
-  if(id===curProjectId){loading=true;stopAll();resetLook();resetHistory();curProjectId=null;persisted=new Set();sizes={};$('prjName').value='';renderTimeline();loading=false}
+  if(id===curProjectId){loading=true;stopAll();resetLook();resetHistory();curProjectId=null;projExported=0;persisted=new Set();sizes={};$('prjName').value='';renderTimeline();loading=false}
   pmsg('Projet « '+name+' » supprimé.');
  }catch(e){pmsg('Suppression impossible : '+((e&&e.message)||e))}
  prjRefresh();
 }
-$('prjNew').addEventListener('click',prjNew);
 $('prjName').addEventListener('change',()=>{if(curProjectId)flushSave()});
 document.addEventListener('visibilitychange',()=>{if(document.hidden)flushSave()});
 window.addEventListener('pagehide',()=>{flushSave()});
@@ -1784,7 +1904,7 @@ async function startExport(){
  $('vexStart').disabled=true;$('vexCancel').style.display='block';$('vexBarWrap').style.display='block';bar.style.width='0%';
  msg.textContent='Préparation…';
  const wasOrig=original;if(original)setOriginal(false);
- let rec=null,stream=null,audioOn=false,chunks=[],stalled=false;
+ let rec=null,stream=null,audioOn=false,chunks=[],stalled=false,exportedOK=false;
  try{
   try{if(navigator.wakeLock)wakeLock=await navigator.wakeLock.request('screen')}catch(e){}
   pauseAll();cancelAnimationFrame(raf);
@@ -1830,6 +1950,7 @@ async function startExport(){
   if(cancelFlag)throw new Error(abortReason||'Export annulé.');
   if(stalled)throw new Error('La lecture s’est bloquée pendant l’export. Réessayez avec une résolution plus basse.');
   const blob=new Blob(chunks,{type:mime.split(';')[0]});
+  exportedOK=true;
   if(!blob.size)throw new Error('Le fichier est vide : cet appareil n’a pas réussi à enregistrer. Essayez 720p ou un autre format.');
   const ext=mime.startsWith('video/mp4')?'mp4':'webm';
   dlUrl=URL.createObjectURL(blob);
@@ -1846,6 +1967,7 @@ async function startExport(){
  if(audioOn){try{aSrc.disconnect();aSrc.connect(aCtx.destination)}catch(e){}}
  try{if(wakeLock){wakeLock.release();wakeLock=null}}catch(e){}
  exporting=false;
+ if(exportedOK&&curProjectId){projExported=Date.now();flushSave()}
  pauseAll();
  seekGlobal(0);
  await waitReady(4000);
