@@ -14,8 +14,16 @@ button,input,select{font:inherit;color:inherit}
 #app{height:100dvh;display:flex;flex-direction:column;padding-top:env(safe-area-inset-top)}
 .top{height:46px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 12px;background:var(--panel);border-bottom:1px solid var(--line)}
 .brand{font-weight:800;font-size:17px;letter-spacing:.14em;color:var(--gold)}
-.brand small{margin-left:8px;font-weight:500;font-size:10px;letter-spacing:.2em;color:var(--mute)}
-.fname{font-size:11px;color:var(--mute);max-width:42%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.brand{line-height:1.15;white-space:nowrap}
+.brand small{display:block;margin:1px 0 0;font-weight:500;font-size:8.5px;letter-spacing:.22em;color:var(--mute)}
+.fname{display:none}
+.uredo{display:flex;gap:6px}
+.uredo button{width:42px;height:34px;border:0;border-radius:9px;background:var(--raise);color:var(--white);font-size:19px;padding:0}
+.uredo button:active{background:var(--grey)}
+.uredo button:disabled{opacity:.28}
+.psrow{display:flex;gap:8px;align-items:center}
+.psrow .item{margin:5px 0}
+.psrow .psx{width:48px;flex:none;text-align:center}
 .monitor{flex:1 1 0;min-height:120px;position:relative;background:#000;overflow:hidden}
 #view{display:none;width:100%;height:100%;object-fit:contain}
 #videoPreview{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
@@ -95,6 +103,7 @@ select{width:100%;background:var(--raise);border:1px solid var(--grey);border-ra
 
  <div class="top">
   <div class="brand">MC STUDIO<small>MERFIL COLOR STUDIO</small></div>
+  <div class="uredo"><button id="undoBtn" aria-label="Annuler" disabled>↶</button><button id="redoBtn" aria-label="Rétablir" disabled>↷</button></div>
   <div class="fname" id="fileName">Aucun média</div>
  </div>
 
@@ -168,6 +177,11 @@ select{width:100%;background:var(--raise);border:1px solid var(--grey);border-ra
     <button class="preset" data-preset="cool">Froid</button>
     <button class="preset" data-preset="reset">Naturel</button>
    </div>
+   <h3>Mes présélections</h3>
+   <div class="ctl"><input type="text" id="psName" maxlength="24" placeholder="Nom (ex. Mon cinéma)"></div>
+   <button class="btn full" id="psSave">Enregistrer mon look actuel</button>
+   <p class="hint" id="psMsg">Un look = curseurs, roues, HSL et courbes (pas les masques). Il est gardé sur ce téléphone.</p>
+   <div id="psList"></div>
    <button class="btn dark full" id="resetButton">Réinitialiser les réglages</button>
   </div>
 
@@ -517,7 +531,7 @@ Object.keys(TOOLS).forEach(t=>$(TOOLS[t]).addEventListener('click',()=>{
 $('mkShow').addEventListener('click',()=>{showMaskOn=!showMaskOn;$('mkShow').classList.toggle('on',showMaskOn);draw()});
 $('mkShow2').addEventListener('click',()=>{showZoneG=!showZoneG;$('mkShow2').classList.toggle('on',showZoneG);draw()});
 $('mkInv').addEventListener('click',()=>{masks[ms].inv=!masks[ms].inv;$('mkInv').classList.toggle('on',masks[ms].inv);draw()});
-$('mkClear').addEventListener('click',()=>{const m=masks[ms];if(!m.ctx)return;m.ctx.clearRect(0,0,MW,MH);syncMask(ms);uploadMasks();draw()});
+$('mkClear').addEventListener('click',()=>{const m=masks[ms];if(!m.ctx)return;pushMaskUndo(ms,captureMask(ms));m.ctx.clearRect(0,0,MW,MH);syncMask(ms);uploadMasks();draw()});
 
 function initMasks(w,h){
  const k=768/Math.max(w,h);
@@ -528,7 +542,7 @@ function initMasks(w,h){
   m.ctx=m.cv.getContext('2d',{willReadFrequently:true});
   m.ex=m.te=0;m.co=m.sa=100;m.op=100;m.inv=false;m.track=null;
  });
- uploadMasks();refreshMaskUI();resetView();
+ uploadMasks();refreshMaskUI();resetView();resetHistory();
 }
 function syncMask(k){ // copie le dessin du masque k dans le canal k de la texture (lignes inversées pour WebGL)
  const m=masks[k];if(!m.ctx)return;
@@ -547,7 +561,7 @@ function uploadMasks(){
  gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,tex);
 }
 (function(){
- let painting=false,last=null,pend=false;
+ let painting=false,last=null,pend=false,strokeBefore=null,strokeMs=0;
  const pos=e=>{
   const r=cv.getBoundingClientRect(),sc=Math.min(r.width/cv.width,r.height/cv.height);
   const dw=cv.width*sc,dh=cv.height*sc,ox=(r.width-dw)/2,oy=(r.height-dh)/2;
@@ -573,10 +587,14 @@ function uploadMasks(){
   if(curPanel!=='masks'||!ready)return;
   if(tool==='zoom'){viewDown(e);return}
   if(tool==='tap'){aiTap(pos(e));return}
+  if(!masks[ms].track){strokeBefore=captureMask(ms);strokeMs=ms}
   painting=true;last=null;cv.setPointerCapture(e.pointerId);paint(e);
  });
  cv.addEventListener('pointermove',e=>{if(tool==='zoom'){viewMove(e);return}if(painting)paint(e)});
- ['pointerup','pointercancel'].forEach(ev=>cv.addEventListener(ev,e=>{painting=false;viewUp(e)}));
+ ['pointerup','pointercancel'].forEach(ev=>cv.addEventListener(ev,e=>{
+  if(painting&&strokeBefore){pushMaskUndo(strokeMs,strokeBefore);strokeBefore=null}
+  painting=false;viewUp(e);
+ }));
 })();
 
 
@@ -618,6 +636,7 @@ function aiGrabSkin(r){ // peau du corps (catégorie 2) + peau du visage (catég
  return{d,w:ms[2].width,h:ms[2].height};
 }
 function aiApply(g){
+ const before=captureMask(ms);
  const m=masks[ms],t=document.createElement('canvas');t.width=g.w;t.height=g.h;
  const tc=t.getContext('2d'),im=tc.createImageData(g.w,g.h),px=im.data;
  let on=0;
@@ -629,6 +648,7 @@ function aiApply(g){
  m.ctx.globalCompositeOperation='source-over';
  m.ctx.clearRect(0,0,MW,MH);m.ctx.drawImage(t,0,0,MW,MH);
  syncMask(ms);uploadMasks();draw();
+ if(before)pushMaskUndo(ms,before);
  return Math.round(on/g.d.length*100);
 }
 async function aiRun(kind,nx,ny){
@@ -1370,6 +1390,97 @@ $('exportButton').addEventListener('click',()=>{
  },type,.94);
 });
 
+
+/* ---------- Annuler / Rétablir et présélections personnelles ---------- */
+const UNDO=[],REDO=[],MAXH=20;let lastSnap=null;
+function snapshot(){
+ return JSON.stringify({
+  s:values(),
+  w:JSON.parse(JSON.stringify(W)),
+  h:HSL.map(o=>({h:o.h,s:o.s,l:o.l})),
+  c:CV,
+  m:masks.map(m=>({name:m.name,ex:m.ex,co:m.co,sa:m.sa,te:m.te,op:m.op,inv:m.inv}))
+ });
+}
+function applySnap(j,withMasks){
+ const o=JSON.parse(j);
+ ids.forEach(id=>{if(id in o.s)$(id).value=o.s[id]});
+ Object.keys(W).forEach(k=>{Object.assign(W[k],o.w[k]);$('l_'+k).value=W[k].l;puck(k)});
+ o.h.forEach((x,i)=>Object.assign(HSL[i],x));showHSL();
+ ['m','r','g','b'].forEach(k=>{CV[k]=o.c[k].map(p=>({x:p.x,y:p.y}))});
+ uploadLUT();drawCurve();
+ if(withMasks&&o.m)o.m.forEach((x,i)=>Object.assign(masks[i],x));
+ refreshMaskUI();apply();
+}
+function histButtons(){$('undoBtn').disabled=!UNDO.length;$('redoBtn').disabled=!REDO.length}
+function resetHistory(){UNDO.length=0;REDO.length=0;lastSnap=snapshot();histButtons()}
+function commit(){ // enregistre le réglage qui vient d'être fait (si quelque chose a changé)
+ if(ptrDown)return;
+ const now=snapshot();
+ if(lastSnap===null){lastSnap=now;return}
+ if(now===lastSnap)return;
+ UNDO.push({t:'set',d:lastSnap});if(UNDO.length>MAXH)UNDO.shift();
+ REDO.length=0;lastSnap=now;histButtons();
+}
+function captureMask(k){const m=masks[k];return m&&m.ctx?m.ctx.getImageData(0,0,MW,MH):null}
+function pushMaskUndo(k,img){if(!img)return;UNDO.push({t:'mask',k,d:img});if(UNDO.length>MAXH)UNDO.shift();REDO.length=0;histButtons()}
+function histMove(from,to){
+ const e=from.pop();if(!e)return;
+ if(e.t==='set'){const cur=snapshot();applySnap(e.d,true);lastSnap=snapshot();e.d=cur}
+ else{
+  const cur=captureMask(e.k);
+  masks[e.k].ctx.putImageData(e.d,0,0);syncMask(e.k);uploadMasks();draw();
+  e.d=cur;
+ }
+ to.push(e);histButtons();
+}
+$('undoBtn').addEventListener('click',()=>histMove(UNDO,REDO));
+$('redoBtn').addEventListener('click',()=>histMove(REDO,UNDO));
+let ptrDown=false; // pas d'enregistrement pendant qu'un doigt est posé : un geste = un seul pas d'annulation
+document.addEventListener('pointerdown',()=>{ptrDown=true},true);
+['pointerup','pointercancel'].forEach(ev=>document.addEventListener(ev,()=>{ptrDown=false},true));
+window.addEventListener('blur',()=>{ptrDown=false});
+['change','pointerup','click','touchend'].forEach(ev=>document.addEventListener(ev,()=>setTimeout(commit,0),true));
+
+const PS_KEY='mcs_presets';
+function psLoad(){try{return JSON.parse(localStorage.getItem(PS_KEY))||[]}catch(e){return[]}}
+function psStore(a){try{localStorage.setItem(PS_KEY,JSON.stringify(a));return true}catch(e){return false}}
+function psRender(){
+ const box=$('psList');box.innerHTML='';
+ const a=psLoad();
+ if(!a.length){return}
+ a.forEach((p,i)=>{
+  const r=document.createElement('div');r.className='psrow';
+  const b=document.createElement('button');b.className='item';b.textContent=p.name;b.addEventListener('click',()=>psApply(i));
+  const d=document.createElement('button');d.className='item psx';d.textContent='✕';d.setAttribute('aria-label','Supprimer '+p.name);d.addEventListener('click',()=>psDel(i));
+  r.appendChild(b);r.appendChild(d);box.appendChild(r);
+ });
+}
+function psApply(i){
+ const p=psLoad()[i];if(!p)return;
+ const cur=JSON.parse(snapshot());
+ applySnap(JSON.stringify(Object.assign({},cur,{s:p.s,w:p.w,h:p.h,c:p.c})),false);
+ setOriginal(false);commit();
+ $('psMsg').textContent='Présélection « '+p.name+' » appliquée. Vous pouvez l’annuler avec ↶.';
+}
+function psDel(i){
+ const a=psLoad(),p=a[i];if(!p)return;
+ if(!confirm('Supprimer la présélection « '+p.name+' » ?'))return;
+ a.splice(i,1);psStore(a);psRender();
+ $('psMsg').textContent='Présélection « '+p.name+' » supprimée.';
+}
+$('psSave').addEventListener('click',()=>{
+ const a=psLoad();
+ if(a.length>=30&&!a.some(p=>p.name.toLowerCase()===($('psName').value.trim()||'').toLowerCase())){$('psMsg').textContent='Limite de 30 présélections atteinte : supprimez-en une.';return}
+ const name=$('psName').value.trim()||('Look '+(a.length+1));
+ const o=JSON.parse(snapshot()),look={name,s:o.s,w:o.w,h:o.h,c:o.c};
+ const k=a.findIndex(p=>p.name.toLowerCase()===name.toLowerCase());
+ if(k>=0)a[k]=look;else a.push(look);
+ if(!psStore(a)){$('psMsg').textContent='Impossible d’enregistrer : le stockage de Safari est plein ou bloqué.';return}
+ $('psName').value='';psRender();
+ $('psMsg').textContent='Présélection « '+name+' » '+(k>=0?'mise à jour.':'enregistrée.');
+});
+
 /* ---------- Export vidéo du montage (enregistrement en temps réel, avec le son) ---------- */
 let aCtx=null,aSrc=null,aDest=null,cancelFlag=false,abortReason='',wakeLock=null,dlUrl='';
 const CODECS=[
@@ -1522,6 +1633,8 @@ $('bigBtn').addEventListener('click',()=>{
 });
 refreshMaskUI();
 apply();
+resetHistory();
+psRender();
 </script>
 </body>
 </html>
