@@ -104,6 +104,7 @@ select{width:100%;background:var(--raise);border:1px solid var(--grey);border-ra
   <canvas id="histo" width="260" height="112"></canvas>
   <button class="ab hb" id="histoBtn">Histogramme</button>
   <button class="ab hb" id="bigBtn" style="left:auto;right:8px">⤢ Agrandir</button>
+  <button class="ab" id="fitBtn" style="display:none;top:44px;left:8px;right:auto">⟲ Vue 1×</button>
  </div>
 
  <div class="transport">
@@ -784,6 +785,8 @@ function applyView(){
  cv.style.transformOrigin='center center';
  cv.style.transform=(VW.z===1&&!VW.x&&!VW.y)?'':`translate(${VW.x}px,${VW.y}px) scale(${VW.z})`;
  $('mk_zoom').value=Math.round(VW.z*100);$('mk_zoomV').textContent=VW.z.toFixed(1)+'×';
+ $('fitBtn').style.display=VW.z>1.001?'block':'none';
+ $('fitBtn').textContent='⟲ Vue 1× ('+VW.z.toFixed(1)+'×)';
 }
 function resetView(){VW.z=1;VW.x=0;VW.y=0;vp.clear();g0=null;applyView()}
 $('mk_zoom').addEventListener('input',e=>{
@@ -791,6 +794,7 @@ $('mk_zoom').addEventListener('input',e=>{
  VW.x*=f;VW.y*=f;VW.z=nz;applyView();
 });
 $('mkFit').addEventListener('click',resetView);
+$('fitBtn').addEventListener('click',resetView);
 function vmid(){
  const a=[...vp.values()],mr=cv.parentElement.getBoundingClientRect(),n=Math.min(2,a.length);
  let x=0,y=0;for(let i=0;i<n;i++){x+=a[i].x;y+=a[i].y}
@@ -800,7 +804,13 @@ function startGesture(){
  if(!vp.size){g0=null;return}
  const m=vmid();g0={z:VW.z,x:VW.x,y:VW.y,mx:m.x,my:m.y,d:m.d};
 }
-function viewDown(e){cv.setPointerCapture(e.pointerId);vp.set(e.pointerId,{x:e.clientX,y:e.clientY});startGesture()}
+let lastViewTap=0;
+function viewDown(e){
+ const n=Date.now();
+ if(vp.size===0&&n-lastViewTap<300){lastViewTap=0;resetView();return}
+ if(vp.size===0)lastViewTap=n;
+ cv.setPointerCapture(e.pointerId);vp.set(e.pointerId,{x:e.clientX,y:e.clientY});startGesture();
+}
 function viewUp(e){if(vp.delete(e.pointerId))startGesture()}
 function viewMove(e){
  if(!vp.has(e.pointerId)||!g0)return;
