@@ -267,7 +267,7 @@ select{width:100%;background:var(--raise);border:1px solid var(--grey);border-ra
    <label class="btn full" for="fileAdd">＋ Ajouter une photo ou une vidéo</label>
    <input type="file" id="fileAdd" accept="image/*,video/*" multiple>
    <button class="btn dark full" id="edClear">Tout retirer</button>
-   <p class="hint">Les actions s’appliquent au clip sous la tête de lecture (le trait doré). Chaque clip a ses propres couleurs et masques. Une coupe copie les réglages sur les deux morceaux. Le suivi automatique des masques n’existe pas encore.</p>
+   <p class="hint">Les actions s’appliquent au clip sous la tête de lecture (le trait doré). Chaque clip a ses propres couleurs et masques. Une coupe copie les réglages sur les deux morceaux. Tout le montage (couper, début, fin, déplacer, supprimer, durée, ajouter, tout retirer) s’annule avec ↶ et ↷. Le suivi automatique des masques n’existe pas encore.</p>
   </div>
 
   <div class="panel" id="masks">
@@ -1109,7 +1109,8 @@ function showCanvas(){$('placeholder').style.display='none';cv.style.display='bl
 /* ---------- Import : une photo, ou une ou plusieurs vidéos (clips) ---------- */
 let lookClip=null,clips=[],curClip=0,curUrl='',pending=null,needMasks=false,photoName='',photoEl=null,imgClip=false,lastTexSrc=null,ph={base:0,t0:0,playing:false};
 const isUsed=u=>clips.some(c=>c.url===u);
-function clearClips(){[...new Set(clips.map(c=>c.url))].forEach(u=>URL.revokeObjectURL(u));clips=[];lookClip=null;curClip=0;curUrl='';pending=null;imgClip=false;lastTexSrc=null;ph={base:0,t0:0,playing:false}}
+const deadUrls=new Set();
+function clearClips(keep){[...new Set(clips.map(c=>c.url))].forEach(u=>{URL.revokeObjectURL(u);deadUrls.add(u)});if(!keep){UNDO.length=0;REDO.length=0;histButtons()}clips=[];lookClip=null;curClip=0;curUrl='';pending=null;imgClip=false;lastTexSrc=null;ph={base:0,t0:0,playing:false}}
 
 function photoToTexture(im){ // envoie la photo sur la carte graphique (réduite si trop grande)
  let src=im,w=im.naturalWidth,h=im.naturalHeight;
@@ -1152,6 +1153,7 @@ function convertPhotoToClip(){ // la photo seule devient le premier clip de la t
  if(!photoEl)return;
  clips=[{type:'image',name:photoName,url:mediaURL,img:photoEl,in:0,out:5,vw:photoEl.naturalWidth,vh:photoEl.naturalHeight,file:photoFile,key:photoKey||newKey()}];
  lookClip=clips[0];
+ for(const a of [UNDO,REDO])a.forEach(e=>{if(e.t!=='edit'&&!e.c)e.c=clips[0]}); // les réglages faits sur la photo seule appartiennent à ce premier clip
  mediaURL='';curClip=0;mediaType='video';needMasks=false;lastTexSrc=null;
  showPhotoClip(clips[0],0,false);renderTimeline();
 }
@@ -1202,12 +1204,13 @@ async function handleFiles(list){
  }
  if(mediaType==='image')convertPhotoToClip();
  else if(mediaType!=='video'){video.pause();clearClips()}
- const had=clips.length;let ok=0;const bad=[];
+ const had=clips.length,before=had&&mediaType==='video'?editSnap():null;let ok=0;const bad=[];
  for(const f of media){
   say('Import de '+f.name+'…');
   const r=isVideoFile(f)?await addVideoClip(f):await addPhotoClip(f);
   if(r)ok++;else bad.push(f.name);
  }
+ if(ok&&before)pushEdit(before);
  say(ok+' média'+(ok>1?'s':'')+' ajouté'+(ok>1?'s':'')+'. Timeline : '+clips.length+' clip'+(clips.length>1?'s':'')+'.'+(bad.length?' Illisible sur ce navigateur : '+bad.join(', ')+'.':''));
  if(!had&&ok&&curPanel==='media')goTo('color');
 }
@@ -1394,53 +1397,60 @@ function here(){
  const T=globalT(),a=clipAt(T);
  return{i:a.i,t:a.t,T,c:clips[a.i]};
 }
-function emptyAll(){
- video.pause();clearClips();mediaType='';ready=false;photoEl=null;srcPhoto=null;
+function emptyAll(keep){
+ video.pause();clearClips(keep);mediaType='';ready=false;photoEl=null;srcPhoto=null;
  showMessage('Moniteur vide');setPlayhead(0);$('timeLabel').textContent=fmt(0);renderTimeline();
 }
 $('edSplit').addEventListener('click',()=>{
  const k=here();if(!k)return;
  if(k.t<=k.c.in+.1||k.t>=k.c.out-.1){$('editInfo').textContent='Placez la tête de lecture à l’intérieur du clip pour couper.';return}
- if(lookClip===k.c)saveLook(k.c);
+ const before=editSnap();
  const b={...k.c,in:k.t};k.c.out=k.t;
  if(k.c.look)b.look=cloneLook(k.c.look);
- clips.splice(k.i+1,0,b);curClip=k.i+1;renderTimeline();
+ clips.splice(k.i+1,0,b);curClip=k.i+1;switchLook(b);renderTimeline();pushEdit(before);
 });
 $('edIn').addEventListener('click',()=>{
  const k=here();if(!k)return;
  if(k.t>=k.c.out-.1){$('editInfo').textContent='Le début doit rester avant la fin du clip.';return}
- k.c.in=k.t;renderTimeline();seekGlobal(clipStart(k.i));
+ const before=editSnap();
+ k.c.in=k.t;renderTimeline();seekGlobal(clipStart(k.i));pushEdit(before);
 });
 $('edOut').addEventListener('click',()=>{
  const k=here();if(!k)return;
  if(k.t<=k.c.in+.1){$('editInfo').textContent='La fin doit rester après le début du clip.';return}
- k.c.out=k.t;renderTimeline();seekGlobal(clipStart(k.i)+clipLen(k.c)-0.02);
+ const before=editSnap();
+ k.c.out=k.t;renderTimeline();seekGlobal(clipStart(k.i)+clipLen(k.c)-0.02);pushEdit(before);
 });
 function moveClip(d){
  const k=here();if(!k)return;
  const j=k.i+d;if(j<0||j>=clips.length)return;
+ const before=editSnap();
  [clips[k.i],clips[j]]=[clips[j],clips[k.i]];
- renderTimeline();seekGlobal(clipStart(j)+(k.t-k.c.in));
+ renderTimeline();seekGlobal(clipStart(j)+(k.t-k.c.in));pushEdit(before);
 }
 $('edLeft').addEventListener('click',()=>moveClip(-1));
 $('edRight').addEventListener('click',()=>moveClip(1));
 $('edDel').addEventListener('click',()=>{
  const k=here();if(!k)return;
+ const before=editSnap();
  clips.splice(k.i,1);
- if(!isUsed(k.c.url)){URL.revokeObjectURL(k.c.url);if(curUrl===k.c.url)curUrl=''}
- if(!clips.length){emptyAll();return}
+ if(!clips.length){emptyAll(true);pushEdit(before);return}
  curClip=Math.min(k.i,clips.length-1);
- renderTimeline();seekGlobal(clipStart(curClip));
+ renderTimeline();seekGlobal(clipStart(curClip));pushEdit(before);
 });
 function changeDur(d){
  const k=here();if(!k)return;
  if(k.c.type!=='image'){$('editInfo').textContent='Ce réglage concerne les photos. Pour une vidéo, utilisez Début ici et Fin ici.';return}
+ const before=editSnap();
  k.c.out=Math.max(k.c.in+1,k.c.out+d);
- renderTimeline();seekGlobal(clipStart(k.i)+(k.t-k.c.in));
+ renderTimeline();seekGlobal(clipStart(k.i)+(k.t-k.c.in));pushEdit(before);
 }
 $('edDurM').addEventListener('click',()=>changeDur(-1));
 $('edDurP').addEventListener('click',()=>changeDur(1));
-$('edClear').addEventListener('click',emptyAll);
+$('edClear').addEventListener('click',()=>{
+ if(mediaType!=='video'||!clips.length){emptyAll();return}
+ const before=editSnap();emptyAll(true);pushEdit(before);
+});
 renderTimeline();
 
 /* ---------- Étalonnage et masques propres à chaque clip ---------- */
@@ -1488,12 +1498,36 @@ function loadLook(c){
  }
  masks.forEach((m,i)=>syncMask(i));
  uploadMasks();mkDirty=true;mkCache=null;
- resetHistory();draw();
+ lastSnap=snapshot();histButtons();draw();
+}
+function editSnap(){ // photo de la timeline (ordre, début/fin, réglages de chaque clip)
+ if(lookClip&&clips.includes(lookClip))saveLook(lookClip);
+ return{T:globalT(),items:clips.map(c=>({c,in:c.in,out:c.out,look:c.look?{...c.look}:null}))};
+}
+function pushEdit(before,withLooks){UNDO.push({t:'edit',d:before,L:!!withLooks});if(UNDO.length>MAXH)UNDO.shift();REDO.length=0;histButtons()}
+function editRestore(s,withLooks){
+ pauseAll();
+ if(lookClip&&clips.includes(lookClip))saveLook(lookClip);
+ if(!s.items.length){emptyAll(true);return}
+ const now=new Set(clips),fresh={};
+ clips=s.items.map(x=>{
+  const c=x.c;c.in=x.in;c.out=x.out;
+  if(withLooks||!now.has(c))c.look=x.look?{...x.look}:null;
+  if(deadUrls.has(c.url)&&c.file){ // média dont le lien a été fermé (tout retirer) : on le recrée
+   if(!fresh[c.url])fresh[c.url]=URL.createObjectURL(c.file);
+   c.url=fresh[c.url];
+  }
+  return c;
+ });
+ mediaType='video';needMasks=false;
+ lookClip=null;curClip=0;curUrl='';
+ renderTimeline();
+ seekGlobal(Math.min(s.T,total()));
 }
 $('lookAll').addEventListener('click',()=>{
  const msg=$('psMsg');
  if(mediaType!=='video'||clips.length<2){msg.textContent='Il faut au moins deux clips dans la timeline.';return}
- const cur=JSON.parse(snapshot());
+ const before=editSnap(),cur=JSON.parse(snapshot());
  clips.forEach(c=>{
   if(c===lookClip)return;
   let o=null;
@@ -1502,7 +1536,8 @@ $('lookAll').addEventListener('click',()=>{
   o.s=cur.s;o.w=cur.w;o.h=cur.h;o.c=cur.c;
   c.look.snap=JSON.stringify(o);
  });
- msg.textContent='Étalonnage copié sur tous les clips (les masques de chaque clip sont gardés).';
+ pushEdit(before,true);
+ msg.textContent='Étalonnage copié sur tous les clips (les masques de chaque clip sont gardés). Vous pouvez l’annuler avec ↶.';
  scheduleSave();
 });
 
@@ -1552,14 +1587,21 @@ function commit(){ // enregistre le réglage qui vient d'être fait (si quelque 
  const now=snapshot();
  if(lastSnap===null){lastSnap=now;return}
  if(now===lastSnap)return;
- UNDO.push({t:'set',d:lastSnap});if(UNDO.length>MAXH)UNDO.shift();
+ UNDO.push({t:'set',d:lastSnap,c:lookClip});if(UNDO.length>MAXH)UNDO.shift();
  REDO.length=0;lastSnap=now;histButtons();
 }
 function captureMask(k){const m=masks[k];return m&&m.ctx?m.ctx.getImageData(0,0,MW,MH):null}
-function pushMaskUndo(k,img){if(!img)return;mkDirty=true;UNDO.push({t:'mask',k,d:img});if(UNDO.length>MAXH)UNDO.shift();REDO.length=0;histButtons()}
+function pushMaskUndo(k,img){if(!img)return;mkDirty=true;UNDO.push({t:'mask',k,d:img,c:lookClip});if(UNDO.length>MAXH)UNDO.shift();REDO.length=0;histButtons()}
 function histMove(from,to){
- const e=from.pop();if(!e)return;
+ let e=from.pop();
+ while(e&&e.t!=='edit'&&e.c&&!clips.includes(e.c))e=from.pop(); // réglage d'un clip qui n'est plus dans le montage : ignoré
+ if(!e){histButtons();return}
+ if(e.t!=='edit'&&e.c&&e.c!==lookClip){ // ce réglage appartient à un autre clip : on s'y rend d'abord
+  pauseAll();seekGlobal(clipStart(clips.indexOf(e.c)));
+  if(lookClip!==e.c){from.push(e);histButtons();return}
+ }
  if(e.t==='set'){const cur=snapshot();applySnap(e.d,true);lastSnap=snapshot();e.d=cur}
+ else if(e.t==='edit'){const cur=editSnap();editRestore(e.d,e.L);e.d=cur}
  else{
   const cur=captureMask(e.k);
   masks[e.k].ctx.putImageData(e.d,0,0);syncMask(e.k);uploadMasks();draw();mkDirty=true;
