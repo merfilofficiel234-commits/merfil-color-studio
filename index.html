@@ -43,6 +43,9 @@ input[type=text]{width:100%;background:var(--raise);border:1px solid var(--grey)
 .clip.on{border-color:var(--gold)}
 .head{position:absolute;top:0;bottom:0;width:2px;background:var(--gold);left:8px;pointer-events:none}
 .head::before{content:"";position:absolute;top:0;left:-5px;border:6px solid transparent;border-top-color:var(--gold)}
+.bar{height:12px;background:var(--grey);border-radius:6px;overflow:hidden;margin:12px 0 4px}
+.bar>div{height:100%;width:0;background:var(--gold)}
+a.btn{display:block;text-decoration:none}
 .big .panel-wrap{height:21dvh}
 .panel-wrap{flex:none;height:40dvh;max-height:340px;background:var(--panel);border-top:1px solid var(--line);overflow-y:auto;-webkit-overflow-scrolling:touch;padding:6px 14px 14px}
 .panel{display:none}.panel.active{display:block}
@@ -246,9 +249,16 @@ select{width:100%;background:var(--raise);border:1px solid var(--grey);border-ra
    </select>
    <button class="btn full" id="exportButton">Télécharger la photo</button>
    <p class="hint" id="exportMessage"></p>
-   <h3>Vidéo</h3>
-   <p class="hint">L’export vidéo avec audio sera ajouté dans une prochaine version.</p>
-   <button class="btn dark full" disabled>Export vidéo · à venir</button>
+   <h3>Vidéo (montage)</h3>
+   <p class="hint" id="vexInfo"></p>
+   <div class="ctl"><label>Résolution</label><select id="vexRes"><option value="720">720p</option><option value="1080" selected>1080p (Full HD)</option><option value="1440">2K (1440p)</option><option value="2160">4K (2160p)</option></select></div>
+   <div class="ctl"><label>Débit vidéo</label><select id="vexBit"><option value="0" selected>Auto (selon la résolution)</option><option value="4">4 Mb/s</option><option value="8">8 Mb/s</option><option value="12">12 Mb/s</option><option value="20">20 Mb/s</option><option value="40">40 Mb/s</option></select></div>
+   <div class="ctl"><label>Format</label><select id="vexCodec"></select></div>
+   <button class="btn full" id="vexStart">Exporter le montage</button>
+   <button class="btn dark full" id="vexCancel" style="display:none">Annuler l’export</button>
+   <div class="bar" id="vexBarWrap" style="display:none"><div id="vexBar"></div></div>
+   <p class="hint" id="vexMsg"></p>
+   <a class="btn full" id="vexDl" style="display:none">⬇ Télécharger la vidéo</a>
   </div>
  </div>
 
@@ -264,7 +274,7 @@ select{width:100%;background:var(--raise);border:1px solid var(--grey);border-ra
 <script>
 const $=id=>document.getElementById(id);
 const cv=$('view'), video=$('videoPreview');
-let mediaType='', mediaURL='', original=false, ready=false, tex=null, raf=0, curPanel='media', srcPhoto=null;
+let mediaType='', mediaURL='', original=false, ready=false, tex=null, raf=0, curPanel='media', srcPhoto=null, exporting=false;
 const FPS=30;
 
 /* ---------- Réglages (id, nom, min, max, défaut, groupe) ---------- */
@@ -444,7 +454,7 @@ function scheduleHisto(){
  requestAnimationFrame(()=>{histoPending=false;computeHisto()});
 }
 function computeHisto(){
- if(!histoOn||!ready||!cv.width)return;
+ if(!histoOn||!ready||!cv.width||exporting)return;
  const w=128,h=Math.max(1,Math.round(128*cv.height/cv.width));
  hSmall.width=w;hSmall.height=h;
  const sc=hSmall.getContext('2d',{willReadFrequently:true});
@@ -927,14 +937,24 @@ if(gl){
 function draw(){
  if(!gl||!ready)return;
  const v=original?defaults:values();
- gl.viewport(0,0,cv.width,cv.height);
+ let vx=0,vy=0,vw=cv.width,vh=cv.height;
+ if(exporting){
+  const vid=mediaType==='video'&&!imgClip,sw=vid?video.videoWidth:(srcPhoto?srcPhoto.naturalWidth:cv.width),sh=vid?video.videoHeight:(srcPhoto?srcPhoto.naturalHeight:cv.height);
+  if(sw&&sh){
+   const sa=sw/sh,ca=cv.width/cv.height;
+   if(sa>ca){vh=Math.round(cv.width/sa);vy=Math.round((cv.height-vh)/2)}
+   else{vw=Math.round(cv.height*sa);vx=Math.round((cv.width-vw)/2)}
+  }
+  gl.clearColor(0,0,0,1);gl.clear(gl.COLOR_BUFFER_BIT);
+ }
+ gl.viewport(vx,vy,vw,vh);
  if(mediaType==='video'&&!imgClip){
   if(video.readyState<2)return;
   gl.bindTexture(gl.TEXTURE_2D,tex);
   gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,video);
  }
  gl.uniform1i(U.t,0);
- gl.uniform2f(U.px,1/cv.width,1/cv.height);
+ gl.uniform2f(U.px,1/vw,1/vh);
  gl.uniform1f(U.ex,v.exposure/50);
  gl.uniform1f(U.co,v.contrast/100);
  gl.uniform1f(U.sa,v.saturation/100);
@@ -968,7 +988,7 @@ function draw(){
  scheduleHisto();
 }
 function loop(){
- if(!imgClip){trackTick();draw()}
+ if(!imgClip&&!exporting){trackTick();draw()}
  if(mediaType==='video'){boundary();updateHead()}
  const live=mediaType==='video'&&(imgClip?ph.playing:(!video.paused&&!video.ended));
  if(live)raf=requestAnimationFrame(loop);
@@ -1012,7 +1032,7 @@ function photoToTexture(im){ // envoie la photo sur la carte graphique (réduite
   const c=document.createElement('canvas');w=Math.round(w*k);h=Math.round(h*k);
   c.width=w;c.height=h;c.getContext('2d').drawImage(im,0,0,w,h);src=c;
  }
- cv.width=w;cv.height=h;
+ if(!exporting){cv.width=w;cv.height=h}
  gl.bindTexture(gl.TEXTURE_2D,tex);
  gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,src);
 }
@@ -1124,7 +1144,7 @@ function loadClip(i,t,play){
 }
 video.addEventListener('loadedmetadata',()=>{
  const k=Math.min(1,1920/Math.max(video.videoWidth,video.videoHeight));
- cv.width=Math.round(video.videoWidth*k);cv.height=Math.round(video.videoHeight*k);
+ if(!exporting){cv.width=Math.round(video.videoWidth*k);cv.height=Math.round(video.videoHeight*k)}
  if(needMasks){initMasks(cv.width,cv.height);needMasks=false}
  srcPhoto=null;ready=true;showCanvas();
  const p=pending||{t:0.01,play:false};pending=null;
@@ -1133,7 +1153,7 @@ video.addEventListener('loadedmetadata',()=>{
 });
 ['loadeddata','seeked'].forEach(ev=>video.addEventListener(ev,()=>{trackTick(true);draw()}));
 video.addEventListener('error',()=>showMessage('Vidéo illisible sur ce navigateur'));
-video.addEventListener('play',()=>{$('playButton').textContent='Ⅱ';cancelAnimationFrame(raf);loop()});
+video.addEventListener('play',()=>{if(aCtx&&aCtx.state!=='running')aCtx.resume();$('playButton').textContent='Ⅱ';cancelAnimationFrame(raf);loop()});
 video.addEventListener('pause',()=>{if(!pending&&!(imgClip&&ph.playing))$('playButton').textContent='▶'});
 video.addEventListener('ended',()=>{
  if(pending||imgClip)return;
@@ -1165,6 +1185,7 @@ function goTo(name){
  document.querySelectorAll('.pages button').forEach(b=>b.classList.toggle('active',b.dataset.panel===name));
  curPanel=name;
  if(name!=='masks')resetView();
+ if(name==='export'&&typeof updateVexInfo==='function')updateVexInfo();
  cv.style.touchAction=name==='masks'?'none':'auto';
  draw();
 }
@@ -1348,6 +1369,151 @@ $('exportButton').addEventListener('click',()=>{
   msg.textContent='Votre fichier '+ext.toUpperCase()+' est prêt ('+cv.width+' × '+cv.height+').';
  },type,.94);
 });
+
+/* ---------- Export vidéo du montage (enregistrement en temps réel, avec le son) ---------- */
+let aCtx=null,aSrc=null,aDest=null,cancelFlag=false,abortReason='',wakeLock=null,dlUrl='';
+const CODECS=[
+ ['MP4 · H.264',['video/mp4;codecs=avc1.640028,mp4a.40.2','video/mp4;codecs=avc1.4D401F,mp4a.40.2','video/mp4;codecs=avc1.42E01E,mp4a.40.2','video/mp4;codecs=avc1']],
+ ['MP4 · H.265 (si disponible)',['video/mp4;codecs=hvc1','video/mp4;codecs=hev1']],
+ ['MP4',['video/mp4']],
+ ['WebM · VP9',['video/webm;codecs=vp9,opus','video/webm;codecs=vp9']],
+ ['WebM',['video/webm;codecs=vp8,opus','video/webm']]
+];
+(function(){
+ const sel=$('vexCodec');
+ if(typeof MediaRecorder==='undefined'){sel.innerHTML='<option value="">Non disponible sur cet appareil</option>';return}
+ let mp4=false;
+ CODECS.forEach(([label,list])=>{
+  const m=list.find(x=>MediaRecorder.isTypeSupported(x));
+  if(!m)return;
+  if(label==='MP4'&&mp4)return;
+  if(label.startsWith('MP4 · H.264'))mp4=true;
+  sel.insertAdjacentHTML('beforeend','<option value="'+m+'">'+label+'</option>');
+ });
+ if(!sel.options.length)sel.innerHTML='<option value="">Aucun format disponible</option>';
+})();
+function updateVexInfo(){
+ $('vexInfo').textContent=clips.length&&mediaType==='video'
+  ?'Montage : '+clips.length+' clip'+(clips.length>1?'s':'')+', durée '+fmt(total())+'. L’export se fait en temps réel : il dure à peu près autant que le montage. Gardez l’écran allumé et cette page ouverte.'
+  :'Pour exporter une vidéo, ajoutez au moins une vidéo ou une photo à la timeline (page Média ou Montage).';
+}
+function audioInit(){
+ if(aCtx)return true;
+ try{
+  const AC=window.AudioContext||window.webkitAudioContext;if(!AC)return false;
+  aCtx=new AC();aSrc=aCtx.createMediaElementSource(video);aDest=aCtx.createMediaStreamDestination();
+  aSrc.connect(aCtx.destination);
+  return true;
+ }catch(e){aCtx=null;return false}
+}
+function waitReady(ms){
+ return new Promise(res=>{
+  const t0=performance.now();
+  const chk=()=>{const ok=!pending&&!video.seeking&&(imgClip||video.readyState>=2);if(ok||performance.now()-t0>ms)res(ok);else setTimeout(chk,50)};
+  chk();
+ });
+}
+function restoreCanvas(){
+ const c=clips[curClip];if(!c)return;
+ if(c.type==='image'){lastTexSrc=null;showPhotoClip(c,c.in,false)}
+ else{
+  const k=Math.min(1,1920/Math.max(video.videoWidth||1,video.videoHeight||1));
+  cv.width=Math.round(video.videoWidth*k)||cv.width;cv.height=Math.round(video.videoHeight*k)||cv.height;draw();
+ }
+}
+document.addEventListener('visibilitychange',()=>{
+ if(exporting&&document.hidden){cancelFlag=true;abortReason='L’application est passée en arrière-plan : export interrompu. Recommencez en gardant cette page ouverte.'}
+});
+$('vexCancel').addEventListener('click',()=>{cancelFlag=true;abortReason='Export annulé.'});
+$('vexStart').addEventListener('click',startExport);
+async function startExport(){
+ const msg=$('vexMsg'),bar=$('vexBar');
+ if(exporting)return;
+ if(mediaType!=='video'||!clips.length){msg.textContent='Ajoutez d’abord au moins une vidéo ou une photo à la timeline (une photo seule s’exporte avec le bouton Télécharger la photo).';return}
+ const mime=$('vexCodec').value;
+ if(!mime||typeof MediaRecorder==='undefined'||!cv.captureStream){msg.textContent='Cet appareil ne permet pas d’enregistrer une vidéo ici.';return}
+ // taille de sortie : la résolution est celle du petit côté, avec le format du premier clip
+ const short=+$('vexRes').value,c0=clips[0],asp=(c0.vw&&c0.vh)?c0.vw/c0.vh:16/9;
+ let W,H;
+ if(asp>=1){H=short;W=Math.round(short*asp)}else{W=short;H=Math.round(short/asp)}
+ W+=W%2;H+=H%2;
+ const auto={720:5,1080:10,1440:16,2160:35},bps=(+$('vexBit').value||auto[short])*1e6;
+ if(dlUrl){URL.revokeObjectURL(dlUrl);dlUrl=''}
+ $('vexDl').style.display='none';
+ exporting=true;cancelFlag=false;abortReason='';
+ $('vexStart').disabled=true;$('vexCancel').style.display='block';$('vexBarWrap').style.display='block';bar.style.width='0%';
+ msg.textContent='Préparation…';
+ const wasOrig=original;if(original)setOriginal(false);
+ let rec=null,stream=null,audioOn=false,chunks=[],stalled=false;
+ try{
+  try{if(navigator.wakeLock)wakeLock=await navigator.wakeLock.request('screen')}catch(e){}
+  pauseAll();cancelAnimationFrame(raf);
+  cv.width=W;cv.height=H;
+  seekGlobal(0);
+  if(!(await waitReady(8000)))throw new Error('Le premier clip ne se charge pas.');
+  draw();
+  stream=cv.captureStream(30);
+  audioOn=audioInit();
+  if(audioOn){
+   await aCtx.resume();
+   aSrc.disconnect();aSrc.connect(aDest);
+   aDest.stream.getAudioTracks().forEach(t=>stream.addTrack(t));
+  }
+  rec=new MediaRecorder(stream,audioOn?{mimeType:mime,videoBitsPerSecond:bps,audioBitsPerSecond:128000}:{mimeType:mime,videoBitsPerSecond:bps});
+  rec.ondataavailable=e=>{if(e.data&&e.data.size)chunks.push(e.data)};
+  const stopped=new Promise(res=>{rec.onstop=res});
+  rec.start(500);
+  // lecture du montage : le canvas est enregistré pendant qu'il joue
+  if(imgClip){ph.t0=performance.now();ph.playing=true;$('playButton').textContent='Ⅱ';loop()}
+  else await video.play().catch(()=>{});
+  const tot=total(),t0=performance.now();
+  let lastT=-1,lastMove=t0,retried=false;
+  await new Promise(done=>{
+   const tick=()=>{
+    if(cancelFlag){done();return}
+    trackTick();draw();
+    const T=globalT();
+    bar.style.width=Math.min(100,T/tot*100).toFixed(1)+'%';
+    msg.textContent='Export en cours : '+fmt(T)+' / '+fmt(tot)+' · '+W+'×'+H+(audioOn?' · avec le son':' · sans le son');
+    const now=performance.now();
+    if(T>lastT+0.01){lastT=T;lastMove=now}
+    if(!isPlaying()&&T>=tot-0.1){done();return}
+    if(now-lastMove>4000&&!retried&&!pending){retried=true;if(imgClip){ph.t0=performance.now()-(ph.base)*1000;ph.playing=true}else video.play().catch(()=>{})}
+    if(now-lastMove>15000){stalled=true;done();return}
+    requestAnimationFrame(tick);
+   };
+   requestAnimationFrame(tick);
+  });
+  pauseAll();
+  if(rec.state!=='inactive')rec.stop();
+  await stopped;
+  if(cancelFlag)throw new Error(abortReason||'Export annulé.');
+  if(stalled)throw new Error('La lecture s’est bloquée pendant l’export. Réessayez avec une résolution plus basse.');
+  const blob=new Blob(chunks,{type:mime.split(';')[0]});
+  if(!blob.size)throw new Error('Le fichier est vide : cet appareil n’a pas réussi à enregistrer. Essayez 720p ou un autre format.');
+  const ext=mime.startsWith('video/mp4')?'mp4':'webm';
+  dlUrl=URL.createObjectURL(blob);
+  const a=$('vexDl');a.href=dlUrl;a.download='MC-Studio-montage.'+ext;a.style.display='block';
+  bar.style.width='100%';
+  msg.textContent='Export terminé : '+(blob.size/1048576).toFixed(1)+' Mo · '+W+'×'+H+' · '+ext.toUpperCase()+(audioOn?' avec le son':' sans le son')+'. Appuyez sur Télécharger la vidéo.';
+ }catch(e){
+  msg.textContent=(e&&e.message)?e.message:'Export impossible sur cet appareil.';
+  bar.style.width='0%';
+  try{if(rec&&rec.state!=='inactive')rec.stop()}catch(_){}
+ }
+ // remise en état
+ if(stream)stream.getTracks().forEach(t=>t.stop());
+ if(audioOn){try{aSrc.disconnect();aSrc.connect(aCtx.destination)}catch(e){}}
+ try{if(wakeLock){wakeLock.release();wakeLock=null}}catch(e){}
+ exporting=false;
+ pauseAll();
+ seekGlobal(0);
+ await waitReady(4000);
+ restoreCanvas();
+ if(wasOrig)setOriginal(true);
+ $('vexStart').disabled=false;$('vexCancel').style.display='none';
+ setTimeout(()=>{if(!exporting)$('vexBarWrap').style.display='none'},1500);
+}
 
 $('bigBtn').addEventListener('click',()=>{
  const a=$('app');a.classList.toggle('big');
