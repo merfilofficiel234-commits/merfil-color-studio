@@ -54,6 +54,13 @@ input[type=text]{width:100%;background:var(--raise);border:1px solid var(--grey)
 .bar{height:12px;background:var(--grey);border-radius:6px;overflow:hidden;margin:12px 0 4px}
 .bar>div{height:100%;width:0;background:var(--gold)}
 a.btn{display:block;text-decoration:none}
+.prow{display:flex;align-items:center;gap:8px;margin:8px 0;padding:8px;background:var(--raise);border:1px solid var(--grey);border-radius:10px}
+.prow.cur{border-color:var(--gold)}
+.pth{width:56px;height:42px;object-fit:cover;border-radius:6px;background:#000;flex:none}
+.pmeta{flex:1;min-width:0}
+.pmeta b{display:block;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pmeta small{color:var(--mute);font-size:11px}
+.prow .preset{padding:10px 12px}
 .big .panel-wrap{height:21dvh}
 .panel-wrap{flex:none;height:40dvh;max-height:340px;background:var(--panel);border-top:1px solid var(--line);overflow-y:auto;-webkit-overflow-scrolling:touch;padding:6px 14px 14px}
 .panel{display:none}.panel.active{display:block}
@@ -140,6 +147,12 @@ select{width:100%;background:var(--raise);border:1px solid var(--grey);border-ra
    <input type="file" id="fileInput" accept="image/*,video/*" multiple>
    <p class="hint" id="importInfo">Chaque photo ou vidéo ajoutée s’ajoute à la timeline, à la suite des autres.</p>
    <div id="clipList"></div>
+   <h3>Projet</h3>
+   <div class="ctl"><input type="text" id="prjName" maxlength="30" placeholder="Nom du projet"></div>
+   <p class="hint" id="prjInfo">Aucun projet ouvert. Dès que vous importez un média, un projet est créé et enregistré automatiquement sur cet iPhone.</p>
+   <button class="btn dark full" id="prjNew">＋ Nouveau projet</button>
+   <div id="prjBox"></div>
+   <p class="hint" id="prjSpace"></p>
   </div>
 
   <div class="panel" id="color">
@@ -288,7 +301,9 @@ select{width:100%;background:var(--raise);border:1px solid var(--grey);border-ra
 <script>
 const $=id=>document.getElementById(id);
 const cv=$('view'), video=$('videoPreview');
-let mediaType='', mediaURL='', original=false, ready=false, tex=null, raf=0, curPanel='media', srcPhoto=null, exporting=false;
+let mediaType='', mediaURL='', original=false, ready=false, tex=null, raf=0, curPanel='media', srcPhoto=null, exporting=false,
+ photoFile=null, photoKey='', curProjectId=null, projCreated=0, saving=false, saveT=0, loading=false,
+ mkDirty=true, mkCache=null, pendingRestore=null, persisted=new Set(), sizes={};
 const FPS=30;
 
 /* ---------- Réglages (id, nom, min, max, défaut, groupe) ---------- */
@@ -542,7 +557,7 @@ function initMasks(w,h){
   m.ctx=m.cv.getContext('2d',{willReadFrequently:true});
   m.ex=m.te=0;m.co=m.sa=100;m.op=100;m.inv=false;m.track=null;
  });
- uploadMasks();refreshMaskUI();resetView();resetHistory();
+ uploadMasks();refreshMaskUI();resetView();resetHistory();mkDirty=true;mkCache=null;if(pendingRestore)finishRestore();
 }
 function syncMask(k){ // copie le dessin du masque k dans le canal k de la texture (lignes inversées pour WebGL)
  const m=masks[k];if(!m.ctx)return;
@@ -1057,7 +1072,7 @@ function photoToTexture(im){ // envoie la photo sur la carte graphique (réduite
  gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,src);
 }
 function importPhoto(file){ // une seule photo, sans montage : on peut la retoucher et l'exporter
- cancelAnimationFrame(raf);video.pause();clearClips();
+ cancelAnimationFrame(raf);video.pause();clearClips();photoFile=file;photoKey=newKey();
  if(mediaURL)URL.revokeObjectURL(mediaURL);
  mediaURL=URL.createObjectURL(file);
  ready=false;mediaType='image';photoName=file.name;
@@ -1084,7 +1099,7 @@ function showPhotoClip(c,t,play){ // affiche un clip photo ; t = temps dans le c
 function photoT(){return ph.base+(ph.playing?(performance.now()-ph.t0)/1000:0)}
 function convertPhotoToClip(){ // la photo seule devient le premier clip de la timeline
  if(!photoEl)return;
- clips=[{type:'image',name:photoName,url:mediaURL,img:photoEl,in:0,out:5,vw:photoEl.naturalWidth,vh:photoEl.naturalHeight}];
+ clips=[{type:'image',name:photoName,url:mediaURL,img:photoEl,in:0,out:5,vw:photoEl.naturalWidth,vh:photoEl.naturalHeight,file:photoFile,key:photoKey||newKey()}];
  mediaURL='';curClip=0;mediaType='video';needMasks=false;lastTexSrc=null;
  showPhotoClip(clips[0],0,false);renderTimeline();
 }
@@ -1092,7 +1107,7 @@ function addPhotoClip(file){
  return new Promise(res=>{
   const url=URL.createObjectURL(file),im=new Image();
   im.onload=()=>{
-   const clip={type:'image',name:file.name,url,img:im,in:0,out:5,vw:im.naturalWidth,vh:im.naturalHeight};
+   const clip={type:'image',name:file.name,url,img:im,in:0,out:5,vw:im.naturalWidth,vh:im.naturalHeight,file,key:newKey()};
    const first=!clips.length;
    clips.push(clip);
    if(first){mediaType='video';needMasks=true;setOriginal(false);loadClip(0,0,false)}
@@ -1110,7 +1125,7 @@ function addVideoClip(file){
   const tm=setTimeout(()=>end(false),20000);
   p.preload='metadata';p.muted=true;p.playsInline=true;
   p.onloadedmetadata=()=>{
-   const clip={name:file.name,url,in:0,out:p.duration,vw:p.videoWidth,vh:p.videoHeight};
+   const clip={name:file.name,url,in:0,out:p.duration,vw:p.videoWidth,vh:p.videoHeight,file,key:newKey()};
    p.removeAttribute('src');p.load();
    if(!isFinite(clip.out)||clip.out<=0){end(false);return}
    const first=!clips.length;
@@ -1283,7 +1298,7 @@ function renderTimeline(){
   r.addEventListener('click',()=>{pauseAll();seekGlobal(clipStart(i))});
   L.appendChild(r);
  });
- markCurrent();updateEditInfo();
+ markCurrent();updateEditInfo();scheduleSave();
 }
 function updateEditInfo(){
  $('editInfo').textContent=!clips.length?(mediaType==='image'?'Le montage concerne les vidéos. Importez une vidéo.':'Importez une vidéo pour commencer.'):
@@ -1423,13 +1438,13 @@ function commit(){ // enregistre le réglage qui vient d'être fait (si quelque 
  REDO.length=0;lastSnap=now;histButtons();
 }
 function captureMask(k){const m=masks[k];return m&&m.ctx?m.ctx.getImageData(0,0,MW,MH):null}
-function pushMaskUndo(k,img){if(!img)return;UNDO.push({t:'mask',k,d:img});if(UNDO.length>MAXH)UNDO.shift();REDO.length=0;histButtons()}
+function pushMaskUndo(k,img){if(!img)return;mkDirty=true;UNDO.push({t:'mask',k,d:img});if(UNDO.length>MAXH)UNDO.shift();REDO.length=0;histButtons()}
 function histMove(from,to){
  const e=from.pop();if(!e)return;
  if(e.t==='set'){const cur=snapshot();applySnap(e.d,true);lastSnap=snapshot();e.d=cur}
  else{
   const cur=captureMask(e.k);
-  masks[e.k].ctx.putImageData(e.d,0,0);syncMask(e.k);uploadMasks();draw();
+  masks[e.k].ctx.putImageData(e.d,0,0);syncMask(e.k);uploadMasks();draw();mkDirty=true;
   e.d=cur;
  }
  to.push(e);histButtons();
@@ -1440,7 +1455,7 @@ let ptrDown=false; // pas d'enregistrement pendant qu'un doigt est posé : un ge
 document.addEventListener('pointerdown',()=>{ptrDown=true},true);
 ['pointerup','pointercancel'].forEach(ev=>document.addEventListener(ev,()=>{ptrDown=false},true));
 window.addEventListener('blur',()=>{ptrDown=false});
-['change','pointerup','click','touchend'].forEach(ev=>document.addEventListener(ev,()=>setTimeout(commit,0),true));
+['change','pointerup','click','touchend'].forEach(ev=>document.addEventListener(ev,()=>{setTimeout(commit,0);scheduleSave()},true));
 
 const PS_KEY='mcs_presets';
 function psLoad(){try{return JSON.parse(localStorage.getItem(PS_KEY))||[]}catch(e){return[]}}
@@ -1480,6 +1495,220 @@ $('psSave').addEventListener('click',()=>{
  $('psName').value='';psRender();
  $('psMsg').textContent='Présélection « '+name+' » '+(k>=0?'mise à jour.':'enregistrée.');
 });
+
+/* ---------- Projets : sauvegarde automatique sur l'iPhone (IndexedDB) ---------- */
+function newKey(){return Math.random().toString(36).slice(2,10)}
+let dbp=null;
+function dbOpen(){
+ if(dbp)return dbp;
+ dbp=new Promise((res,rej)=>{
+  if(!window.indexedDB){rej(new Error('IndexedDB indisponible'));return}
+  const r=indexedDB.open('mcstudio',1);
+  r.onupgradeneeded=()=>{const d=r.result;d.createObjectStore('projects',{keyPath:'id'});d.createObjectStore('blobs')};
+  r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error||new Error('Ouverture impossible'));
+ });
+ return dbp;
+}
+function dbTx(store,mode,fn){
+ return dbOpen().then(d=>new Promise((res,rej)=>{
+  const tx=d.transaction(store,mode),st=tx.objectStore(store);let out;
+  const rq=fn(st);if(rq)rq.onsuccess=()=>{out=rq.result};
+  tx.oncomplete=()=>res(out);tx.onerror=()=>rej(tx.error);tx.onabort=()=>rej(tx.error||new Error('Écriture refusée (espace plein ?)'));
+ }));
+}
+const dbGet=(s,k)=>dbTx(s,'readonly',st=>st.get(k));
+const dbAll=s=>dbTx(s,'readonly',st=>st.getAll());
+const dbPut=(s,v,k)=>dbTx(s,'readwrite',st=>k===undefined?st.put(v):st.put(v,k));
+const dbDel=(s,k)=>dbTx(s,'readwrite',st=>st.delete(k));
+function dbDelProject(id){
+ return dbDel('projects',id).then(()=>dbTx('blobs','readwrite',st=>{
+  const rq=st.openCursor(IDBKeyRange.bound(id+'/',id+'/\uffff'));
+  rq.onsuccess=()=>{const c=rq.result;if(c){c.delete();c.continue()}};
+  return null;
+ }));
+}
+const pmsg=t=>{$('prjInfo').textContent=t};
+const hhmm=d=>new Date(d).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
+const mo=n=>(n/1048576>=10?Math.round(n/1048576):(n/1048576).toFixed(1))+' Mo';
+function maskAlphaArr(k){
+ const m=masks[k];if(!m.ctx)return null;
+ const d=m.ctx.getImageData(0,0,MW,MH).data,a=new Uint8Array(MW*MH);
+ for(let i=0;i<a.length;i++)a[i]=d[i*4+3];
+ return a;
+}
+function scheduleSave(){
+ if(loading||exporting)return;
+ clearTimeout(saveT);saveT=setTimeout(saveNow,1500);
+}
+function flushSave(){clearTimeout(saveT);return saveNow()}
+async function saveNow(){
+ if(loading||exporting)return;
+ if(saving){saveT=setTimeout(saveNow,500);return}
+ const has=mediaType==='image'?!!photoFile:(mediaType==='video'&&clips.length>0);
+ if(!has&&!curProjectId)return;
+ saving=true;
+ try{
+  if(!curProjectId){
+   const all=await dbAll('projects');let n=all.length+1;
+   while(all.some(p=>p.name==='Projet '+n))n++;
+   curProjectId=Date.now().toString(36)+newKey();projCreated=Date.now();
+   $('prjName').value='Projet '+n;persisted=new Set();sizes={};
+   try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist()}catch(e){}
+  }
+  const id=curProjectId;
+  const need=[];
+  if(mediaType==='image'){if(photoFile)need.push([photoKey,photoFile])}
+  else clips.forEach(c=>{if(c.file&&c.key&&!need.some(x=>x[0]===c.key))need.push([c.key,c.file])});
+  for(const [k,f] of need){
+   if(!persisted.has(k)){await dbPut('blobs',{blob:f,name:f.name||'media',type:f.type,size:f.size},id+'/'+k);persisted.add(k);sizes[k]=f.size}
+  }
+  for(const k of [...persisted]){ // retire les médias qui ne sont plus dans le montage
+   if(!need.some(x=>x[0]===k)){await dbDel('blobs',id+'/'+k);persisted.delete(k);delete sizes[k]}
+  }
+  if(mkDirty||!mkCache){mkCache=masks.map((m,k)=>maskAlphaArr(k));mkDirty=false}
+  let thumb='';
+  try{
+   if(ready){const t=document.createElement('canvas');t.width=96;t.height=Math.max(1,Math.round(96*cv.height/cv.width));
+    t.getContext('2d').drawImage(cv,0,0,t.width,t.height);thumb=t.toDataURL('image/jpeg',.6)}
+  }catch(e){}
+  const keys=need.map(x=>x[0]);
+  const rec={
+   id,name:($('prjName').value||'Projet').trim()||'Projet',created:projCreated,updated:Date.now(),
+   mode:mediaType==='image'?'image':(clips.length?'video':'empty'),
+   photoKey:mediaType==='image'?photoKey:'',photoName:photoName,
+   clips:clips.map(c=>({type:c.type||'video',name:c.name,key:c.key,in:c.in,out:c.out,vw:c.vw,vh:c.vh})),
+   snap:snapshot(),mk:mkCache,dims:[MW,MH],thumb,sizes:Object.fromEntries(keys.map(k=>[k,sizes[k]||0])),
+   size:keys.reduce((a,k)=>a+(sizes[k]||0),0)
+  };
+  await dbPut('projects',rec);
+  pmsg('Projet « '+rec.name+' » enregistré automatiquement à '+hhmm(rec.updated)+' ('+mo(rec.size)+').');
+  prjRefresh();
+ }catch(e){
+  pmsg('Sauvegarde impossible : '+((e&&e.message)||e)+'. Vous pouvez continuer à travailler, mais le projet ne sera pas gardé.');
+ }
+ saving=false;
+}
+async function prjRefresh(){
+ const box=$('prjBox');
+ try{
+  const all=(await dbAll('projects')).sort((a,b)=>b.updated-a.updated);
+  box.innerHTML='';
+  all.forEach(r=>{
+   const row=document.createElement('div');row.className='prow'+(r.id===curProjectId?' cur':'');
+   const im=document.createElement('img');im.className='pth';im.alt='';if(r.thumb)im.src=r.thumb;
+   const meta=document.createElement('div');meta.className='pmeta';
+   const b=document.createElement('b');b.textContent=r.name;
+   const sm=document.createElement('small');
+   sm.textContent=new Date(r.updated).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'})+' '+hhmm(r.updated)+' · '+mo(r.size||0)+(r.id===curProjectId?' · ouvert':'');
+   meta.appendChild(b);meta.appendChild(sm);
+   const o=document.createElement('button');o.className='preset';o.textContent='Ouvrir';o.addEventListener('click',()=>prjOpen(r.id));
+   const d=document.createElement('button');d.className='preset';d.textContent='✕';d.setAttribute('aria-label','Supprimer '+r.name);d.addEventListener('click',()=>prjDelete(r.id,r.name));
+   row.append(im,meta,o,d);box.appendChild(row);
+  });
+  if(!all.length&&!curProjectId)pmsg('Aucun projet ouvert. Dès que vous importez un média, un projet est créé et enregistré automatiquement sur cet iPhone.');
+  else if(all.length&&!curProjectId&&mediaType==='')pmsg('Votre travail précédent est dans la liste : appuyez sur Ouvrir pour le reprendre.');
+ }catch(e){box.textContent='';pmsg('Les projets ne sont pas disponibles ici : '+((e&&e.message)||e))}
+ try{
+  if(navigator.storage&&navigator.storage.estimate){
+   const q=await navigator.storage.estimate();
+   $('prjSpace').textContent='Espace utilisé par MC Studio : '+mo(q.usage||0)+(q.quota?' sur environ '+(q.quota/1073741824).toFixed(1)+' Go disponibles':'')+'. Safari peut effacer les données d’un site non utilisé pendant plusieurs jours : ajoutez MC Studio à l’écran d’accueil (Partager, puis Sur l’écran d’accueil) pour mieux les garder.';
+  }
+ }catch(e){}
+}
+function resetLook(){
+ ids.forEach(id=>$(id).value=defaults[id]);
+ resetWheels();resetHSL();resetCurves();
+ if(original)setOriginal(false);
+ apply();
+}
+function stopAll(){
+ cancelAnimationFrame(raf);pauseAll();
+ clearClips();mediaType='';ready=false;photoEl=null;srcPhoto=null;photoFile=null;photoKey='';
+ masks.forEach(m=>{m.track=null});
+ showMessage('Moniteur vide');setPlayhead(0);$('timeLabel').textContent=fmt(0);
+}
+function finishRestore(){
+ const r=pendingRestore;pendingRestore=null;
+ try{
+  applySnap(r.snap,true);
+  if(r.dims&&r.dims[0]===MW&&r.dims[1]===MH&&r.mk){
+   r.mk.forEach((a,k)=>{
+    if(!a||!masks[k].ctx)return;
+    const im=new ImageData(MW,MH),d=im.data;
+    for(let i=0;i<a.length;i++){d[i*4]=d[i*4+1]=d[i*4+2]=255;d[i*4+3]=a[i]}
+    masks[k].ctx.putImageData(im,0,0);syncMask(k);
+   });
+   uploadMasks();
+  }
+ }catch(e){}
+ mkDirty=true;mkCache=null;resetHistory();loading=false;draw();
+ pmsg('Projet « '+r.name+' » ouvert. Vos modifications sont enregistrées automatiquement.');
+ prjRefresh();
+}
+async function prjOpen(id){
+ if(loading||exporting)return;
+ try{
+  await flushSave();
+  const rec=await dbGet('projects',id);
+  if(!rec){pmsg('Projet introuvable.');return}
+  loading=true;
+  stopAll();resetLook();
+  curProjectId=id;projCreated=rec.created;$('prjName').value=rec.name;
+  persisted=new Set(Object.keys(rec.sizes||{}));sizes=Object.assign({},rec.sizes||{});
+  pendingRestore=rec;
+  if(rec.mode==='image'){
+   const b=await dbGet('blobs',id+'/'+rec.photoKey);
+   if(!b)throw new Error('La photo du projet est introuvable.');
+   const f=new File([b.blob],b.name||rec.photoName||'photo',{type:b.type});
+   importPhoto(f);photoKey=rec.photoKey;persisted.add(rec.photoKey);
+  }else if(rec.mode==='video'&&rec.clips.length){
+   const urls={},imgs={},files={};
+   for(const c of rec.clips){
+    if(urls[c.key])continue;
+    const b=await dbGet('blobs',id+'/'+c.key);
+    if(!b)throw new Error('Un média du projet est introuvable : '+c.name);
+    files[c.key]=b.blob;urls[c.key]=URL.createObjectURL(b.blob);
+    if(c.type==='image'){const im=new Image();await new Promise(res=>{im.onload=res;im.onerror=res;im.src=urls[c.key]});imgs[c.key]=im}
+   }
+   clips=rec.clips.map(c=>({type:c.type==='image'?'image':undefined,name:c.name,url:urls[c.key],img:imgs[c.key],in:c.in,out:c.out,vw:c.vw,vh:c.vh,file:files[c.key],key:c.key}));
+   mediaType='video';ready=false;needMasks=true;
+   loadClip(0,clips[0].type==='image'?clips[0].in:clips[0].in+0.01,false);
+   renderTimeline();
+  }else{
+   pendingRestore=null;loading=false;applySnap(rec.snap,true);resetHistory();
+   pmsg('Projet « '+rec.name+' » ouvert (timeline vide). Ajoutez des médias.');prjRefresh();
+  }
+  goTo('media');
+ }catch(e){
+  loading=false;pendingRestore=null;
+  pmsg('Impossible d’ouvrir le projet : '+((e&&e.message)||e));
+ }
+}
+async function prjNew(){
+ if(loading||exporting)return;
+ await flushSave();
+ loading=true;
+ stopAll();resetLook();resetHistory();
+ curProjectId=null;persisted=new Set();sizes={};mkCache=null;mkDirty=true;
+ $('prjName').value='';renderTimeline();
+ loading=false;
+ pmsg('Nouveau projet vide. Importez un média pour commencer : il sera enregistré automatiquement.');
+ prjRefresh();
+}
+async function prjDelete(id,name){
+ if(!confirm('Supprimer le projet « '+name+' » et ses médias enregistrés ?'))return;
+ try{
+  await dbDelProject(id);
+  if(id===curProjectId){loading=true;stopAll();resetLook();resetHistory();curProjectId=null;persisted=new Set();sizes={};$('prjName').value='';renderTimeline();loading=false}
+  pmsg('Projet « '+name+' » supprimé.');
+ }catch(e){pmsg('Suppression impossible : '+((e&&e.message)||e))}
+ prjRefresh();
+}
+$('prjNew').addEventListener('click',prjNew);
+$('prjName').addEventListener('change',()=>{if(curProjectId)flushSave()});
+document.addEventListener('visibilitychange',()=>{if(document.hidden)flushSave()});
+window.addEventListener('pagehide',()=>{flushSave()});
+prjRefresh();
 
 /* ---------- Export vidéo du montage (enregistrement en temps réel, avec le son) ---------- */
 let aCtx=null,aSrc=null,aDest=null,cancelFlag=false,abortReason='',wakeLock=null,dlUrl='';
